@@ -165,6 +165,7 @@ describe('chat root appearance style', () => {
       ]) {
         const style = nativeChatAppearanceStyle(makeSettings({ theme, nativeChatAppearance }))
         expect(style.colorScheme).toBeUndefined()
+        expect(style.color).toBeUndefined()
       }
     }
   )

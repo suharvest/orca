@@ -96,6 +96,8 @@ export function nativeChatAppearanceStyle(
     const foreground = hasThemeColors ? colors.foreground : '#fafafa'
     light = isTerminalBackgroundLight(background)
     style.colorScheme = light ? 'light' : 'dark'
+    // Ghost controls inherit a color, so remapping the token alone leaves the app's color in place.
+    style.color = 'var(--foreground)'
     Object.assign(style, {
       '--chat-font-family': font,
       '--background': 'var(--chat-canvas)',
