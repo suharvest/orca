@@ -74,29 +74,34 @@ export function nativeChatAppearanceStyle(
       },
       systemPrefersDark
     )
-    light = isTerminalBackgroundLight(colors.background)
+    const hasThemeColors = Boolean(colors.background && colors.foreground)
+    const background = hasThemeColors ? colors.background : '#000000'
+    const foreground = hasThemeColors ? colors.foreground : '#fafafa'
+    light = isTerminalBackgroundLight(background)
     Object.assign(style, {
       '--chat-font-family': font,
       '--background': 'var(--chat-canvas)',
       '--foreground': 'var(--chat-foreground-strong)',
-      '--muted-foreground': 'var(--chat-foreground-faint)',
-      '--accent': 'var(--chat-code-surface)',
+      '--muted-foreground': 'var(--chat-source-muted-foreground)',
+      '--accent': 'color-mix(in srgb, var(--chat-source-foreground) 9%, var(--chat-canvas))',
+      '--muted': 'color-mix(in srgb, var(--chat-source-foreground) 7%, var(--chat-canvas))',
+      '--popover': 'color-mix(in srgb, var(--chat-source-foreground) 4%, var(--chat-canvas))',
+      '--popover-foreground': 'var(--chat-foreground-strong)',
       '--accent-foreground': 'var(--chat-foreground-strong)',
-      '--border': 'var(--chat-code-border)',
-      '--input': 'var(--chat-composer-border)',
-      '--card': 'var(--chat-user-surface)',
+      '--border': 'color-mix(in srgb, var(--chat-source-foreground) 7%, var(--chat-canvas))',
+      '--input': 'color-mix(in srgb, var(--chat-source-foreground) 7%, var(--chat-canvas))',
+      '--card': 'color-mix(in srgb, var(--chat-source-foreground) 4%, var(--chat-canvas))',
       '--card-foreground': 'var(--chat-foreground-strong)',
       '--primary': 'var(--chat-foreground-strong)',
       '--primary-foreground': 'var(--chat-canvas)',
-      '--secondary': 'var(--chat-user-surface)',
+      '--secondary': 'var(--muted)',
       '--secondary-foreground': 'var(--chat-foreground-strong)',
-      '--ring': 'var(--chat-foreground-faint)',
-      '--chat-source-background': colors.background,
-      '--chat-source-foreground': colors.foreground,
+      '--ring': 'color-mix(in srgb, var(--chat-source-foreground) 44%, var(--chat-canvas))',
+      '--chat-source-background': background,
+      '--chat-source-foreground': foreground,
       '--chat-source-muted-foreground':
         'color-mix(in srgb, var(--chat-source-foreground) 62%, var(--chat-canvas))',
       '--chat-canvas-mix': '0%',
-      '--chat-strong-mix': light ? '92%' : '90%',
       '--chat-faint-mix': light ? '100%' : '83%',
       '--chat-user-mix': light ? '4%' : '7%',
       '--chat-user-border-mix': light ? '7%' : '6%',
@@ -110,7 +115,10 @@ export function nativeChatAppearanceStyle(
       '--chat-composer-border-mix': light ? '11%' : '9%'
     })
   }
-  style['--chat-foreground-mix'] = `${nativeChatContrastMix(appearance?.contrast ?? 100, light)}%`
+  const bodyMix = nativeChatContrastMix(appearance.contrast, light)
+  style['--chat-foreground-mix'] = `${bodyMix}%`
+  style['--chat-strong-mix'] = `${Math.min(100, bodyMix + (light ? 10 : 12))}%`
+  style.colorScheme = light ? 'light' : 'dark'
   return style
 }
 

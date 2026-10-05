@@ -68,7 +68,15 @@
         "full": "全宽",
         "pixels": "px",
         "reset": "重置",
-        "summary": "{{fontSize}}px · {{width}}宽度"
+        "summary": "{{fontSize}}px · {{width}}宽度",
+        "matchTerminalInterface": "匹配终端外观",
+        "matchTerminalInterfaceDescription": "整个聊天使用与终端相同的字体和配色。更改终端主题后，聊天会自动同步。",
+        "contrast": "对比度",
+        "contrastDescription": "调整聊天文字相对于背景的亮度。滑到最右端可恢复以前更明亮的外观。",
+        "softer": "更柔和",
+        "sharper": "更清晰",
+        "terminalInterfaceSummary": "终端外观",
+        "contrastSummary": "对比度 {{value0}}"
       }
     },
     "browser": {
@@ -19117,13 +19125,5 @@
       "confirm": "删除所有列出的工作树",
       "preservedBranches": "部分嵌套工作树分支已保留"
     }
-  },
-  "settings.appearance.chat.matchTerminalInterface": "Match terminal interface",
-  "settings.appearance.chat.matchTerminalInterfaceDescription": "Use your terminal interface's font and colors for the whole chat. Stays in sync if you change your terminal theme later.",
-  "settings.appearance.chat.contrast": "Contrast",
-  "settings.appearance.chat.contrastDescription": "How bright chat text is against the background. The right end matches the older, brighter look.",
-  "settings.appearance.chat.softer": "Softer",
-  "settings.appearance.chat.sharper": "Sharper",
-  "settings.appearance.chat.terminalInterfaceSummary": "Terminal interface",
-  "settings.appearance.chat.contrastSummary": "Contrast {{value0}}"
+  }
 }

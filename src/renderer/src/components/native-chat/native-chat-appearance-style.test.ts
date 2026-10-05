@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { buildFontFamily } from '@/lib/monospace-font-family'
+import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
 import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-theme-selection'
 import { nativeChatAppearanceStyle, nativeChatContrastMix } from './native-chat-appearance-style'
 
 const makeSettings = createGlobalSettingsFixture
+afterEach(() => vi.restoreAllMocks())
 
 describe('nativeChatContrastMix', () => {
   it.each([
@@ -169,4 +171,50 @@ describe('chat root appearance style', () => {
       ]
     ).toBe('none')
   })
+})
+
+describe('contrast hierarchy and incomplete terminal palettes', () => {
+  it.each(['light', 'dark'] as const)(
+    'keeps strong text above body in %s mode up to the cap',
+    (theme) => {
+      for (const matching of [false, true]) {
+        for (let contrast = 50; contrast <= 150; contrast++) {
+          const style = nativeChatAppearanceStyle(
+            makeSettings({
+              theme,
+              terminalColorOverrides:
+                theme === 'light'
+                  ? { background: '#ffffff', foreground: '#000000' }
+                  : { background: '#000000', foreground: '#ffffff' },
+              nativeChatAppearance: { contrast, matchTerminalInterface: matching }
+            })
+          )
+          const body = Number.parseFloat(style['--chat-foreground-mix'])
+          const strong = Number.parseFloat(style['--chat-strong-mix'])
+          expect(strong).toBe(Math.min(100, body + (theme === 'light' ? 10 : 12)))
+          if (body < 100) {
+            expect(strong).toBeGreaterThan(body)
+          }
+        }
+      }
+    }
+  )
+
+  it.each([{}, { background: '#ffffff' }, { foreground: '#000000' }])(
+    'uses the fallback source pair for an incomplete palette %j',
+    (colors) => {
+      vi.spyOn(terminalThemeSelection, 'resolveConfiguredTerminalColors').mockReturnValue(colors)
+      for (const theme of ['light', 'dark'] as const) {
+        const style = nativeChatAppearanceStyle(
+          makeSettings({
+            theme,
+            nativeChatAppearance: { matchTerminalInterface: true }
+          })
+        )
+        expect(style['--chat-source-background']).toBe('#000000')
+        expect(style['--chat-source-foreground']).toBe('#fafafa')
+        expect(style.colorScheme).toBe('dark')
+      }
+    }
+  )
 })

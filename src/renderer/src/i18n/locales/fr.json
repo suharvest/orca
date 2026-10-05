@@ -167,7 +167,15 @@
         "full": "Pleine",
         "pixels": "px",
         "reset": "Réinitialiser",
-        "summary": "{{fontSize}}px · Largeur {{width}}"
+        "summary": "{{fontSize}}px · Largeur {{width}}",
+        "matchTerminalInterface": "Utiliser l’interface du terminal",
+        "matchTerminalInterfaceDescription": "Utilise la police et les couleurs de l’interface du terminal pour tout le chat. Les changements de thème du terminal sont appliqués automatiquement.",
+        "contrast": "Contraste",
+        "contrastDescription": "Ajuste la luminosité du texte du chat sur le fond. L’extrémité droite retrouve l’ancien aspect, plus lumineux.",
+        "softer": "Plus doux",
+        "sharper": "Plus net",
+        "terminalInterfaceSummary": "Interface du terminal",
+        "contrastSummary": "Contraste {{value0}}"
       }
     },
     "browser": {
@@ -19117,13 +19125,5 @@
       "confirm": "Supprimer tous les worktrees listés",
       "preservedBranches": "Certaines branches de worktrees imbriqués ont été conservées"
     }
-  },
-  "settings.appearance.chat.matchTerminalInterface": "Match terminal interface",
-  "settings.appearance.chat.matchTerminalInterfaceDescription": "Use your terminal interface's font and colors for the whole chat. Stays in sync if you change your terminal theme later.",
-  "settings.appearance.chat.contrast": "Contrast",
-  "settings.appearance.chat.contrastDescription": "How bright chat text is against the background. The right end matches the older, brighter look.",
-  "settings.appearance.chat.softer": "Softer",
-  "settings.appearance.chat.sharper": "Sharper",
-  "settings.appearance.chat.terminalInterfaceSummary": "Terminal interface",
-  "settings.appearance.chat.contrastSummary": "Contrast {{value0}}"
+  }
 }

@@ -68,7 +68,15 @@
         "full": "全幅",
         "pixels": "px",
         "reset": "リセット",
-        "summary": "{{fontSize}}px · 幅: {{width}}"
+        "summary": "{{fontSize}}px · 幅: {{width}}",
+        "matchTerminalInterface": "ターミナルの外観に合わせる",
+        "matchTerminalInterfaceDescription": "チャット全体にターミナルと同じフォントと配色を使用します。ターミナルのテーマを変更すると、チャットにも反映されます。",
+        "contrast": "コントラスト",
+        "contrastDescription": "背景に対するチャットの文字の明るさを調整します。右端にすると、以前の明るい表示になります。",
+        "softer": "柔らかく",
+        "sharper": "くっきり",
+        "terminalInterfaceSummary": "ターミナルの外観",
+        "contrastSummary": "コントラスト {{value0}}"
       }
     },
     "browser": {
@@ -19117,13 +19125,5 @@
       "confirm": "一覧表示されたすべてのワークツリーを削除",
       "preservedBranches": "一部のネストされたワークツリーブランチは保持されました"
     }
-  },
-  "settings.appearance.chat.matchTerminalInterface": "Match terminal interface",
-  "settings.appearance.chat.matchTerminalInterfaceDescription": "Use your terminal interface's font and colors for the whole chat. Stays in sync if you change your terminal theme later.",
-  "settings.appearance.chat.contrast": "Contrast",
-  "settings.appearance.chat.contrastDescription": "How bright chat text is against the background. The right end matches the older, brighter look.",
-  "settings.appearance.chat.softer": "Softer",
-  "settings.appearance.chat.sharper": "Sharper",
-  "settings.appearance.chat.terminalInterfaceSummary": "Terminal interface",
-  "settings.appearance.chat.contrastSummary": "Contrast {{value0}}"
+  }
 }
