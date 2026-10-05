@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 import { NativeChatToolRun } from './NativeChatToolRun'
@@ -18,7 +18,7 @@ const blocks: NativeChatBlock[] = [
 ]
 
 describe('tool-run summary in a matching chat', () => {
-  it.each([false, true])('allows the full summary to wrap, live=%s', (live) => {
+  it.each([false, true])('caps the summary at two wrapped lines, live=%s', (live) => {
     const style = nativeChatAppearanceStyle({
       terminalFontFamily: 'Menlo',
       nativeChatAppearance: { matchTerminalInterface: true }
@@ -34,10 +34,36 @@ describe('tool-run summary in a matching chat', () => {
     expect(style['--chat-font-family']).toContain('Menlo')
     const summary = container.querySelector('span.native-chat-message-text')
     expect(summary).toHaveTextContent(live ? 'running 1 agent' : 'ran 1 agent')
-    expect(summary).toHaveClass('min-w-0', 'whitespace-normal', 'break-words')
-    expect(summary).not.toHaveClass('truncate', 'whitespace-nowrap', 'overflow-hidden', 'font-mono')
+    expect(summary).toHaveClass('min-w-0', 'line-clamp-2', 'whitespace-normal', 'break-words')
+    expect(summary).not.toHaveClass('truncate', 'whitespace-nowrap', 'font-mono')
     const failure = container.querySelector('[aria-label="Failed tool calls: 1"]')
     expect(failure).toHaveTextContent('1 failed')
     expect(failure).toHaveClass('shrink-0')
+  })
+
+  it('keeps a long command available in the expanded detail', () => {
+    const command = `printf ${'x'.repeat(5000)}`
+    const style = nativeChatAppearanceStyle({
+      terminalFontFamily: 'Menlo',
+      nativeChatAppearance: { matchTerminalInterface: true }
+    })
+    const { container } = render(
+      <div className="native-chat-appearance" style={style}>
+        <NativeChatToolRun
+          blocks={[{ type: 'tool-call', name: 'shell', input: { command }, state: 'completed' }]}
+          expandSignal={false}
+        />
+      </div>
+    )
+
+    const summary = container.querySelector('span.native-chat-message-text')
+    expect(summary).toHaveClass('line-clamp-2', 'break-words')
+    expect(summary?.textContent).toContain('printf')
+    expect(summary?.textContent?.length).toBeLessThan(command.length)
+    expect(container.querySelector('pre')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button'))
+
+    expect(container.querySelector('pre')).toHaveTextContent(command)
   })
 })

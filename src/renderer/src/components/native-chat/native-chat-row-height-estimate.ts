@@ -41,7 +41,8 @@ const DEFAULT_ROW_TYPOGRAPHY: NativeChatRowTypography = { lineHeightPx: 22, char
 const PROSE_MIN_LINES = 1
 const USER_BUBBLE_CHROME_PX = 32
 const IMAGE_STRIP_PX = 88
-const TOOL_RUN_PX = 40
+/** Header margin and vertical padding; its summary can occupy two text lines. */
+const TOOL_RUN_CHROME_PX = 16
 const SUBAGENT_ROW_PX = 32
 /** The one-line head that names a subagent above its own rows. */
 export const NATIVE_CHAT_SUBAGENT_SECTION_HEAD_PX = SUBAGENT_ROW_PX
@@ -138,7 +139,7 @@ export function estimateNativeChatRowHeight(
     }
     if (content.toolCount > 0) {
       // A run is one collapsed header by default; its members only exist while open.
-      height += TOOL_RUN_PX
+      height += TOOL_RUN_CHROME_PX + 2 * typography.lineHeightPx
     }
     height += content.subagentGroupCount * SUBAGENT_ROW_PX
     partCount = height > 0 ? 1 : 0
