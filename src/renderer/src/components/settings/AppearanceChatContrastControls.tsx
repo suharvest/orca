@@ -33,7 +33,7 @@ export function AppearanceChatContrastControls({
         <SettingsRow
           label={entries[1].title}
           description={entries[1].description}
-          control={<ChatContrastSlider key={contrast} contrast={contrast} onChange={onChange} />}
+          control={<ChatContrastSlider contrast={contrast} onChange={onChange} />}
         />
       </SearchableSetting>
     </>
@@ -44,7 +44,11 @@ function ChatContrastSlider({
   contrast,
   onChange
 }: Pick<ChatContrastControlsProps, 'onChange'> & { contrast: number }): React.JSX.Element {
-  const [draft, setDraft] = useState(contrast)
+  const [draft, setDraft] = useState({ savedContrast: contrast, value: contrast })
+  // Keep the thumb mounted so committed keyboard changes retain focus.
+  if (draft.savedContrast !== contrast) {
+    setDraft({ savedContrast: contrast, value: contrast })
+  }
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs text-muted-foreground">
@@ -55,16 +59,18 @@ function ChatContrastSlider({
           min={50}
           max={150}
           step={1}
-          value={[draft]}
+          value={[draft.value]}
           thumbLabels={[translate('settings.appearance.chat.contrast', 'Contrast')]}
-          onValueChange={([value]) => setDraft(value)}
+          onValueChange={([value]) => setDraft({ savedContrast: contrast, value })}
           onValueCommit={([value]) => onChange({ contrast: value })}
         />
       </div>
       <span className="text-xs text-muted-foreground">
         {translate('settings.appearance.chat.sharper', 'Sharper')}
       </span>
-      <span className="w-8 text-right text-xs text-muted-foreground tabular-nums">{draft}</span>
+      <span className="w-8 text-right text-xs text-muted-foreground tabular-nums">
+        {draft.value}
+      </span>
     </div>
   )
 }

@@ -189,8 +189,8 @@ describe('contrast hierarchy and incomplete terminal palettes', () => {
               nativeChatAppearance: { contrast, matchTerminalInterface: matching }
             })
           )
-          const body = Number.parseFloat(style['--chat-foreground-mix'])
-          const strong = Number.parseFloat(style['--chat-strong-mix'])
+          const body = Number.parseFloat(String(style['--chat-foreground-mix']))
+          const strong = Number.parseFloat(String(style['--chat-strong-mix']))
           expect(strong).toBe(Math.min(100, body + (theme === 'light' ? 10 : 12)))
           if (body < 100) {
             expect(strong).toBeGreaterThan(body)

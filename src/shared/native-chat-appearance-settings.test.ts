@@ -23,6 +23,21 @@ describe('native chat appearance normalization', () => {
     expect(normalizeNativeChatAppearanceSettings(future)).toEqual(future)
   })
 
+  it('preserves future fields without letting known defaults or malformed values survive', () => {
+    const future = { futureSetting: { nested: 'keep' } }
+    for (const contrast of [100, Number.NaN, Number.POSITIVE_INFINITY, '150', null]) {
+      for (const matchTerminalInterface of [false, 'true', null]) {
+        expect(
+          normalizeNativeChatAppearanceSettings({
+            ...future,
+            contrast,
+            matchTerminalInterface
+          })
+        ).toEqual(future)
+      }
+    }
+  })
+
   it('derives defaults without storing them', () => {
     expect(
       normalizeNativeChatAppearanceSettings({

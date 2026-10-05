@@ -45,7 +45,10 @@ export function normalizeNativeChatAppearanceSettings(
     'width' in value && (value.width === 'wide' || value.width === 'full') ? value.width : undefined
   const normalized: NativeChatAppearanceSettings = {
     ...Object.fromEntries(
-      Object.entries(value).filter(([key]) => !['fontSize', 'codeFontSize', 'width', 'contrast', 'matchTerminalInterface'].includes(key))
+      Object.entries(value).filter(
+        ([key]) =>
+          !['fontSize', 'codeFontSize', 'width', 'contrast', 'matchTerminalInterface'].includes(key)
+      )
     ),
     ...(fontSize !== DEFAULT_NATIVE_CHAT_FONT_SIZE ? { fontSize } : {}),
     ...(codeFontSize !== DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE ? { codeFontSize } : {}),

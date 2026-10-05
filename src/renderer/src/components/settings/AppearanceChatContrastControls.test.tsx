@@ -40,4 +40,24 @@ describe('chat contrast controls', () => {
     expect(screen.getByText('Softer')).toBeTruthy()
     expect(screen.getByText('Sharper')).toBeTruthy()
   })
+  it('keeps keyboard focus when a committed value reaches settings', () => {
+    const updateSettings = vi.fn()
+    const settings = createGlobalSettingsFixture({ nativeChatAppearance: { contrast: 120 } })
+    const { rerender } = render(
+      <AppearanceChatSection settings={settings} updateSettings={updateSettings} />
+    )
+    const slider = screen.getByRole('slider', { name: 'Contrast' })
+    slider.focus()
+    fireEvent.keyDown(slider, { key: 'ArrowLeft' })
+    expect(updateSettings).toHaveBeenLastCalledWith({ nativeChatAppearance: { contrast: 119 } })
+    rerender(
+      <AppearanceChatSection
+        settings={{ ...settings, nativeChatAppearance: { contrast: 119 } }}
+        updateSettings={updateSettings}
+      />
+    )
+    expect(document.activeElement).toBe(slider)
+    fireEvent.keyDown(slider, { key: 'ArrowLeft' })
+    expect(updateSettings).toHaveBeenLastCalledWith({ nativeChatAppearance: { contrast: 118 } })
+  })
 })
