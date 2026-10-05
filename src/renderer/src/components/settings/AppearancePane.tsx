@@ -136,7 +136,7 @@ export function AppearancePane({
   ])
   const chatLabelMatches = matchesSettingsSearch(searchQuery, { title: chatTitle })
   const chatAppearance = resolveNativeChatAppearanceSettings(settings.nativeChatAppearance)
-  const chatSummary = translate(
+  const chatSizeSummary = translate(
     'settings.appearance.chat.summary',
     '{{fontSize}}px · {{width}} width',
     {
@@ -144,6 +144,19 @@ export function AppearancePane({
       width: getChatWidthOptions().find((option) => option.value === chatAppearance.width)?.label
     }
   )
+  const chatSummary = [
+    ...(chatAppearance.matchTerminalInterface
+      ? [translate('settings.appearance.chat.terminalInterfaceSummary', 'Terminal interface')]
+      : []),
+    ...(chatAppearance.contrast !== 100
+      ? [
+          translate('settings.appearance.chat.contrastSummary', 'Contrast {{value0}}', {
+            value0: chatAppearance.contrast
+          })
+        ]
+      : []),
+    chatSizeSummary
+  ].join(' · ')
   const windowSidebarTitle = translate(
     'auto.components.settings.AppearancePane.windowSidebarTitle',
     'Window & Sidebar'

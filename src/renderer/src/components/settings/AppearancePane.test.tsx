@@ -244,6 +244,27 @@ describe('AppearancePane', () => {
     delete (window as unknown as { api?: unknown }).api
   })
 
+  it('summarizes matching and non-default contrast and restores the default summary', async () => {
+    mocks.state.settingsSearchQuery = ''
+    const container = await renderAppearancePane({
+      ...getDefaultSettings('/tmp'),
+      nativeChatAppearance: { matchTerminalInterface: true, contrast: 120 }
+    })
+    await act(async () => {
+      appearanceSectionToggle(container, 'chat')?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true })
+      )
+    })
+    expect(appearanceSectionToggle(container, 'chat')?.textContent).toContain(
+      'Terminal interface · Contrast 120 · 14px · Comfortable width'
+    )
+    await rerenderAppearancePane(getDefaultSettings('/tmp'))
+    const summary = appearanceSectionToggle(container, 'chat')?.textContent
+    expect(summary).toContain('14px · Comfortable width')
+    expect(summary).not.toContain('Terminal interface')
+    expect(summary).not.toContain('Contrast')
+  })
+
   it('shows language as a primary interface control without opening Advanced', async () => {
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))

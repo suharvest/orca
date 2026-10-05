@@ -37,7 +37,16 @@ describe('NativeChatStructuredSession', () => {
     useAppStore.setState({
       settings: {
         ...getDefaultSettings('/tmp'),
-        nativeChatAppearance: { fontSize: 18, codeFontSize: 11, width: 'wide' }
+        theme: 'dark',
+        nativeChatAppearance: {
+          fontSize: 18,
+          codeFontSize: 11,
+          width: 'wide',
+          matchTerminalInterface: true,
+          contrast: 120
+        },
+        terminalFontFamily: 'Consolas',
+        terminalColorOverrides: { background: '#112233', foreground: '#ddeeff' }
       }
     })
     const { container } = render(
@@ -51,14 +60,27 @@ describe('NativeChatStructuredSession', () => {
       />
     )
     const root = container.querySelector<HTMLElement>('[data-native-chat-root]')
+    expect(root?.style.getPropertyValue('--chat-source-background')).toBe('#112233')
+    expect(root?.style.getPropertyValue('--chat-source-foreground')).toBe('#ddeeff')
+    expect(root?.style.getPropertyValue('--chat-code-font-family')).toContain('Consolas')
+    expect(root?.style.getPropertyValue('--chat-font-family')).toContain('Consolas')
+    expect(root?.style.getPropertyValue('--chat-foreground-mix')).toBe('86.8%')
     expect(root?.style.getPropertyValue('--chat-font-size')).toBe('18px')
     expect(root?.style.getPropertyValue('--chat-code-font-size')).toBe('11px')
     expect(root?.style.getPropertyValue('--chat-content-max-width')).toBe('60rem')
     act(() =>
       useAppStore.setState({
-        settings: { ...getDefaultSettings('/tmp'), nativeChatAppearance: { width: 'full' } }
+        settings: {
+          ...getDefaultSettings('/tmp'),
+          theme: 'dark',
+          nativeChatAppearance: { width: 'full' }
+        }
       })
     )
+    expect(root?.style.getPropertyValue('--chat-source-background')).toBe('')
+    expect(root?.style.getPropertyValue('--chat-source-foreground')).toBe('')
+    expect(root?.style.getPropertyValue('--chat-font-family')).toBe('')
+    expect(root?.style.getPropertyValue('--chat-foreground-mix')).toBe('78%')
     expect(root?.style.getPropertyValue('--chat-font-size')).toBe('14px')
     expect(root?.style.getPropertyValue('--chat-content-max-width')).toBe('none')
     act(() => useAppStore.setState({ settings: original }))

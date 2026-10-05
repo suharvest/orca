@@ -315,8 +315,8 @@ export function NativeChatResolvedView({
 
   // Only the focused conversation accepts chat text-size shortcuts.
   useNativeChatFontSize(isConversation && isVisible && isFocusedGroup, rootRef)
-  const appearanceSettings = useAppStore((state) => state.settings?.nativeChatAppearance)
-  const appearanceStyle = useNativeChatAppearanceStyle({ nativeChatAppearance: appearanceSettings })
+  const appearanceSettings = useAppStore((state) => state.settings)
+  const appearanceStyle = useNativeChatAppearanceStyle(appearanceSettings)
 
   return (
     <div

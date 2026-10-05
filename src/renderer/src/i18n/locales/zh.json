@@ -19117,5 +19117,13 @@
       "confirm": "删除所有列出的工作树",
       "preservedBranches": "部分嵌套工作树分支已保留"
     }
-  }
+  },
+  "settings.appearance.chat.matchTerminalInterface": "Match terminal interface",
+  "settings.appearance.chat.matchTerminalInterfaceDescription": "Use your terminal interface's font and colors for the whole chat. Stays in sync if you change your terminal theme later.",
+  "settings.appearance.chat.contrast": "Contrast",
+  "settings.appearance.chat.contrastDescription": "How bright chat text is against the background. The right end matches the older, brighter look.",
+  "settings.appearance.chat.softer": "Softer",
+  "settings.appearance.chat.sharper": "Sharper",
+  "settings.appearance.chat.terminalInterfaceSummary": "Terminal interface",
+  "settings.appearance.chat.contrastSummary": "Contrast {{value0}}"
 }
