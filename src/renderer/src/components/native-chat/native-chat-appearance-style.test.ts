@@ -155,6 +155,20 @@ describe('chat root appearance style', () => {
       '--chat-estimated-chars-per-line': 96
     })
   })
+  it.each(['light', 'dark', 'system'] as const)(
+    'leaves native controls app-owned in %s mode when matching is off',
+    (theme) => {
+      for (const nativeChatAppearance of [
+        undefined,
+        { matchTerminalInterface: false },
+        { contrast: 150 }
+      ]) {
+        const style = nativeChatAppearanceStyle(makeSettings({ theme, nativeChatAppearance }))
+        expect(style.colorScheme).toBeUndefined()
+      }
+    }
+  )
+
   it('clamps sizes on read and derives the column width', () => {
     expect(
       nativeChatAppearanceStyle({

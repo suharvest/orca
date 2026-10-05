@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { NativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
-import { getChatContrastSearchEntries } from './chat-appearance-search'
+import { getChatContrastEntriesByKey } from './chat-appearance-search'
 import { translate } from '@/i18n/i18n'
 import { Slider } from '../ui/slider'
 import { SearchableSetting } from './SearchableSetting'
@@ -17,22 +17,22 @@ export function AppearanceChatContrastControls({
   onChange,
   forceVisiblePrimary
 }: ChatContrastControlsProps): React.JSX.Element {
-  const entries = getChatContrastSearchEntries()
+  const entries = getChatContrastEntriesByKey()
   const { contrast, matchTerminalInterface: matching } = appearance
   return (
     <>
-      <SearchableSetting {...entries[0]} forceVisible={forceVisiblePrimary}>
+      <SearchableSetting {...entries.matchTerminalInterface} forceVisible={forceVisiblePrimary}>
         <SettingsSwitchRow
-          label={entries[0].title}
-          description={entries[0].description}
+          label={entries.matchTerminalInterface.title}
+          description={entries.matchTerminalInterface.description}
           checked={matching}
           onChange={() => onChange({ matchTerminalInterface: !matching })}
         />
       </SearchableSetting>
-      <SearchableSetting {...entries[1]} forceVisible={forceVisiblePrimary}>
+      <SearchableSetting {...entries.contrast} forceVisible={forceVisiblePrimary}>
         <SettingsRow
-          label={entries[1].title}
-          description={entries[1].description}
+          label={entries.contrast.title}
+          description={entries.contrast.description}
           control={<ChatContrastSlider contrast={contrast} onChange={onChange} />}
         />
       </SearchableSetting>

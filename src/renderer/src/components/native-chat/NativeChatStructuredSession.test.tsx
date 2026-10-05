@@ -1,3 +1,4 @@
+import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
 import { getDefaultSettings } from '../../../../shared/constants'
 // @vitest-environment happy-dom
 
@@ -60,6 +61,8 @@ describe('NativeChatStructuredSession', () => {
       />
     )
     const root = container.querySelector<HTMLElement>('[data-native-chat-root]')
+    expect(root?.style.colorScheme).toBe('dark')
+    expect(root?.dataset.nativeChatScheme).toBe('dark')
     expect(root?.style.getPropertyValue('--chat-source-background')).toBe('#112233')
     expect(root?.style.getPropertyValue('--chat-source-foreground')).toBe('#ddeeff')
     expect(root?.style.getPropertyValue('--chat-code-font-family')).toContain('Consolas')
@@ -77,6 +80,8 @@ describe('NativeChatStructuredSession', () => {
         }
       })
     )
+    expect(root?.style.colorScheme).toBe('')
+    expect(root?.dataset.nativeChatScheme).toBeUndefined()
     expect(root?.style.getPropertyValue('--chat-source-background')).toBe('')
     expect(root?.style.getPropertyValue('--chat-source-foreground')).toBe('')
     expect(root?.style.getPropertyValue('--chat-font-family')).toBe('')
@@ -86,9 +91,47 @@ describe('NativeChatStructuredSession', () => {
     act(() => useAppStore.setState({ settings: original }))
   })
 
+  it('skips appearance work on unrelated settings writes and updates the root for appearance changes', () => {
+    const original = useAppStore.getState().settings
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      theme: 'dark' as const,
+      nativeChatAppearance: { matchTerminalInterface: true }
+    }
+    useAppStore.setState({ settings })
+    const resolveColors = vi.spyOn(terminalThemeSelection, 'resolveConfiguredTerminalColors')
+    const view = render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="appearance-subscription-tab"
+        sessionId="appearance-subscription-session"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+    const initialResolutions = resolveColors.mock.calls.length
+    act(() =>
+      useAppStore.setState({
+        settings: { ...settings, terminalFontSize: settings.terminalFontSize + 1 }
+      })
+    )
+    expect(resolveColors).toHaveBeenCalledTimes(initialResolutions)
+    act(() => useAppStore.setState({ settings: { ...settings, terminalFontFamily: 'Menlo' } }))
+    expect(resolveColors).toHaveBeenCalledTimes(initialResolutions + 1)
+    expect(
+      view.container
+        .querySelector<HTMLElement>('[data-native-chat-root]')
+        ?.style.getPropertyValue('--chat-code-font-family')
+    ).toContain('Menlo')
+    view.unmount()
+    useAppStore.setState({ settings: original })
+  })
+
   afterEach(() => {
     cleanup()
     resetStructuredSessionMocks()
+    vi.restoreAllMocks()
   })
 
   it("gives the composer this pane shows the conversation's own draft, and Stop returns text there", () => {

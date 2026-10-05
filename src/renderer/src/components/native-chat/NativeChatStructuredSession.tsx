@@ -1,6 +1,8 @@
+import { useShallow } from 'zustand/react/shallow'
 import { cn } from '@/lib/utils'
 import {
   NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
+  selectNativeChatAppearanceSettings,
   useNativeChatAppearanceStyle
 } from './native-chat-appearance-style'
 import { useMemo, useRef, useState } from 'react'
@@ -143,7 +145,9 @@ export function NativeChatStructuredSession(
     viewState.kind === 'ready' && props.isVisible && props.isFocusedGroup,
     rootRef
   )
-  const appearanceSettings = useAppStore((state) => state.settings)
+  const appearanceSettings = useAppStore(
+    useShallow((state) => selectNativeChatAppearanceSettings(state.settings))
+  )
   const appearanceStyle = useNativeChatAppearanceStyle(appearanceSettings)
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(

@@ -1,5 +1,6 @@
 import './native-chat-appearance.css'
-import type { CSSProperties } from 'react'
+import { useMemo, type CSSProperties } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
 import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-theme-selection'
@@ -12,20 +13,36 @@ export const NATIVE_CHAT_TRANSCRIPT_OUTER_CLASS = 'px-3 pt-10 pb-4 sm:px-4'
 export const NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS =
   'mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-5 px-[5px]'
 
-export type NativeChatAppearanceStyle = CSSProperties & Record<`--${string}`, string | number> & {
-  '--chat-font-size': string
-  '--chat-code-font-size': string
-  '--chat-content-max-width': string
-  '--chat-inline-code-ratio': string
-  '--chat-estimated-line-height': number
-  '--chat-estimated-chars-per-line': number
-}
+export type NativeChatAppearanceStyle = CSSProperties &
+  Record<`--${string}`, string | number> & {
+    '--chat-font-size': string
+    '--chat-code-font-size': string
+    '--chat-content-max-width': string
+    '--chat-inline-code-ratio': string
+    '--chat-estimated-line-height': number
+    '--chat-estimated-chars-per-line': number
+  }
 
 // Width buckets keep a pixel-by-pixel resize from re-deriving the entire transcript.
 export function nativeChatColumnWidthBucket(width: number | null | undefined): number | null {
   return typeof width === 'number' && Number.isFinite(width) && width > 0
     ? Math.max(1, Math.floor(width / 32) * 32)
     : null
+}
+
+export function selectNativeChatAppearanceSettings(
+  settings: Partial<GlobalSettings> | null | undefined
+) {
+  return {
+    theme: settings?.theme,
+    terminalThemeDark: settings?.terminalThemeDark,
+    terminalThemeLight: settings?.terminalThemeLight,
+    terminalUseSeparateLightTheme: settings?.terminalUseSeparateLightTheme,
+    terminalCustomThemes: settings?.terminalCustomThemes,
+    terminalColorOverrides: settings?.terminalColorOverrides,
+    terminalFontFamily: settings?.terminalFontFamily,
+    nativeChatAppearance: settings?.nativeChatAppearance
+  }
 }
 
 export function nativeChatContrastMix(contrast: number, light: boolean): number {
@@ -78,6 +95,7 @@ export function nativeChatAppearanceStyle(
     const background = hasThemeColors ? colors.background : '#000000'
     const foreground = hasThemeColors ? colors.foreground : '#fafafa'
     light = isTerminalBackgroundLight(background)
+    style.colorScheme = light ? 'light' : 'dark'
     Object.assign(style, {
       '--chat-font-family': font,
       '--background': 'var(--chat-canvas)',
@@ -118,12 +136,19 @@ export function nativeChatAppearanceStyle(
   const bodyMix = nativeChatContrastMix(appearance.contrast, light)
   style['--chat-foreground-mix'] = `${bodyMix}%`
   style['--chat-strong-mix'] = `${Math.min(100, bodyMix + (light ? 10 : 12))}%`
-  style.colorScheme = light ? 'light' : 'dark'
   return style
 }
 
 export function useNativeChatAppearanceStyle(
-  settings: Partial<GlobalSettings> | null | undefined
+  settings: Partial<GlobalSettings> | null | undefined,
+  measuredColumnWidthPx?: number | null
 ): NativeChatAppearanceStyle {
-  return nativeChatAppearanceStyle(settings, undefined, useSystemPrefersDark())
+  const selectInputs = useShallow(selectNativeChatAppearanceSettings)
+  const inputs = selectInputs(settings)
+  const systemPrefersDark = useSystemPrefersDark()
+  const measuredWidth = nativeChatColumnWidthBucket(measuredColumnWidthPx)
+  return useMemo(
+    () => nativeChatAppearanceStyle(inputs, measuredWidth, systemPrefersDark),
+    [inputs, measuredWidth, systemPrefersDark]
+  )
 }

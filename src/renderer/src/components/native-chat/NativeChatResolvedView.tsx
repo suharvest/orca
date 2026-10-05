@@ -1,6 +1,8 @@
+import { useShallow } from 'zustand/react/shallow'
 import { cn } from '@/lib/utils'
 import {
   NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
+  selectNativeChatAppearanceSettings,
   useNativeChatAppearanceStyle
 } from './native-chat-appearance-style'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -315,7 +317,9 @@ export function NativeChatResolvedView({
 
   // Only the focused conversation accepts chat text-size shortcuts.
   useNativeChatFontSize(isConversation && isVisible && isFocusedGroup, rootRef)
-  const appearanceSettings = useAppStore((state) => state.settings)
+  const appearanceSettings = useAppStore(
+    useShallow((state) => selectNativeChatAppearanceSettings(state.settings))
+  )
   const appearanceStyle = useNativeChatAppearanceStyle(appearanceSettings)
 
   return (
