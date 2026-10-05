@@ -51,8 +51,7 @@ import { NativeChatToolRunCallCounts } from './NativeChatToolRunCallCounts'
 const NO_SUBAGENT_GROUPS: NativeChatSubagentGroupBlock[] = []
 const NO_BACKGROUND_TASKS: NativeChatBackgroundTaskBlock[] = []
 
-/** A run of a message's tool calls/results, collapsed to a one-line summary that
- *  expands to the individual inline tool lines. */
+/** A run of tool calls/results with a summary that expands to the individual tool lines. */
 export function NativeChatToolRun({
   blocks,
   previousTodoWrite,
@@ -268,13 +267,10 @@ export function NativeChatToolRun({
               className="text-chat-foreground-faint"
             />
           ) : null}
-          {/* The run in words, in the transcript's own type. Present tense while
-              live, past once settled; the text changes in place and nothing
-              around it moves. While live it keeps its width and the preview
-              beside it is what gives way. */}
+          {/* Wrap the summary in its inherited font; only the latest-call preview may truncate. */}
           <span
             className={cn(
-              'truncate text-sm native-chat-message-text leading-relaxed transition-colors',
+              'min-w-0 whitespace-normal break-words text-sm native-chat-message-text leading-relaxed transition-colors',
               live
                 ? 'max-w-[72%] shrink-0 animate-pulse text-chat-foreground motion-reduce:animate-none'
                 : 'min-w-0 text-chat-foreground-faint group-hover/tool-run:text-chat-foreground'
