@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { NativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
-import { getChatContrastEntriesByKey } from './chat-appearance-search'
+import { chatTerminalControlledHint, getChatContrastEntriesByKey } from './chat-appearance-search'
 import { translate } from '@/i18n/i18n'
 import { Slider } from '../ui/slider'
 import { SearchableSetting } from './SearchableSetting'
@@ -32,8 +32,10 @@ export function AppearanceChatContrastControls({
       <SearchableSetting {...entries.contrast} forceVisible={forceVisiblePrimary}>
         <SettingsRow
           label={entries.contrast.title}
-          description={entries.contrast.description}
-          control={<ChatContrastSlider contrast={contrast} onChange={onChange} />}
+          description={matching ? chatTerminalControlledHint() : entries.contrast.description}
+          control={
+            <ChatContrastSlider contrast={contrast} onChange={onChange} disabled={matching} />
+          }
         />
       </SearchableSetting>
     </>
@@ -42,8 +44,12 @@ export function AppearanceChatContrastControls({
 
 function ChatContrastSlider({
   contrast,
-  onChange
-}: Pick<ChatContrastControlsProps, 'onChange'> & { contrast: number }): React.JSX.Element {
+  onChange,
+  disabled
+}: Pick<ChatContrastControlsProps, 'onChange'> & {
+  contrast: number
+  disabled: boolean
+}): React.JSX.Element {
   const [draft, setDraft] = useState({ savedContrast: contrast, value: contrast })
   // Keep the thumb mounted so committed keyboard changes retain focus.
   if (draft.savedContrast !== contrast) {
@@ -56,6 +62,7 @@ function ChatContrastSlider({
       </span>
       <div className="w-40">
         <Slider
+          disabled={disabled}
           min={50}
           max={150}
           step={1}

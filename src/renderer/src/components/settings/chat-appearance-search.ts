@@ -3,6 +3,10 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import type { SettingsSearchEntry } from './settings-search'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 
+export function chatTerminalControlledHint(): string {
+  return translate('settings.appearance.chat.terminalControlledHint', 'Set by terminal interface.')
+}
+
 export const getChatContrastEntriesByKey = createLocalizedCatalog(
   () =>
     ({

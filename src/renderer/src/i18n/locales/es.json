@@ -76,7 +76,8 @@
         "softer": "Más suave",
         "sharper": "Más nítido",
         "terminalInterfaceSummary": "Interfaz del terminal",
-        "contrastSummary": "Contraste {{value0}}"
+        "contrastSummary": "Contraste {{value0}}",
+        "terminalControlledHint": "Lo controla la interfaz del terminal."
       }
     },
     "browser": {

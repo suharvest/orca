@@ -140,7 +140,9 @@ export function AppearancePane({
     'settings.appearance.chat.summary',
     '{{fontSize}}px · {{width}} width',
     {
-      fontSize: chatAppearance.fontSize,
+      fontSize: chatAppearance.matchTerminalInterface
+        ? settings.terminalFontSize
+        : chatAppearance.fontSize,
       width: getChatWidthOptions().find((option) => option.value === chatAppearance.width)?.label
     }
   )
@@ -148,7 +150,7 @@ export function AppearancePane({
     ...(chatAppearance.matchTerminalInterface
       ? [translate('settings.appearance.chat.terminalInterfaceSummary', 'Terminal interface')]
       : []),
-    ...(chatAppearance.contrast !== 100
+    ...(!chatAppearance.matchTerminalInterface && chatAppearance.contrast !== 100
       ? [
           translate('settings.appearance.chat.contrastSummary', 'Contrast {{value0}}', {
             value0: chatAppearance.contrast

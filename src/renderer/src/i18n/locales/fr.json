@@ -175,7 +175,8 @@
         "softer": "Plus doux",
         "sharper": "Plus net",
         "terminalInterfaceSummary": "Interface du terminal",
-        "contrastSummary": "Contraste {{value0}}"
+        "contrastSummary": "Contraste {{value0}}",
+        "terminalControlledHint": "Défini par l’interface du terminal."
       }
     },
     "browser": {

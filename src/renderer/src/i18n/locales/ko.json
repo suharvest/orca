@@ -76,7 +76,8 @@
         "softer": "부드럽게",
         "sharper": "선명하게",
         "terminalInterfaceSummary": "터미널 모양",
-        "contrastSummary": "대비 {{value0}}"
+        "contrastSummary": "대비 {{value0}}",
+        "terminalControlledHint": "터미널 인터페이스 설정을 따릅니다."
       }
     },
     "browser": {

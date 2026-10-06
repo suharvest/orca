@@ -41,6 +41,9 @@ export function selectNativeChatAppearanceSettings(
     terminalCustomThemes: settings?.terminalCustomThemes,
     terminalColorOverrides: settings?.terminalColorOverrides,
     terminalFontFamily: settings?.terminalFontFamily,
+    terminalFontSize: settings?.nativeChatAppearance?.matchTerminalInterface
+      ? settings.terminalFontSize
+      : undefined,
     nativeChatAppearance: settings?.nativeChatAppearance
   }
 }
@@ -58,7 +61,11 @@ export function nativeChatAppearanceStyle(
   systemPrefersDark = getSystemPrefersDark()
 ): NativeChatAppearanceStyle {
   const appearance = resolveNativeChatAppearanceSettings(settings?.nativeChatAppearance)
-  const { fontSize, codeFontSize, width } = appearance
+  const { width } = appearance
+  const matching = appearance.matchTerminalInterface
+  const terminalFontSize = settings?.terminalFontSize ?? 14
+  const fontSize = matching ? terminalFontSize : appearance.fontSize
+  const codeFontSize = matching ? terminalFontSize : appearance.codeFontSize
   const maxWidthPx = width === 'wide' ? 960 : width === 'full' ? Number.POSITIVE_INFINITY : 736
   const measuredWidth = nativeChatColumnWidthBucket(measuredColumnWidthPx)
   const columnWidthPx = Math.min(
@@ -79,7 +86,7 @@ export function nativeChatAppearanceStyle(
     '--chat-code-font-family': font
   }
   let light = settings?.theme === 'light' || (settings?.theme === 'system' && !systemPrefersDark)
-  if (appearance?.matchTerminalInterface === true) {
+  if (matching) {
     const colors = resolveConfiguredTerminalColors(
       {
         theme: settings?.theme ?? 'dark',
@@ -135,7 +142,7 @@ export function nativeChatAppearanceStyle(
       '--chat-composer-border-mix': light ? '11%' : '9%'
     })
   }
-  const bodyMix = nativeChatContrastMix(appearance.contrast, light)
+  const bodyMix = matching ? 100 : nativeChatContrastMix(appearance.contrast, light)
   style['--chat-foreground-mix'] = `${bodyMix}%`
   style['--chat-strong-mix'] = `${Math.min(100, bodyMix + (light ? 10 : 12))}%`
   return style

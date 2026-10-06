@@ -256,7 +256,7 @@ describe('AppearancePane', () => {
       )
     })
     expect(appearanceSectionToggle(container, 'chat')?.textContent).toContain(
-      'Terminal interface · Contrast 120 · 14px · Comfortable width'
+      'Terminal interface · 14px · Comfortable width'
     )
     await rerenderAppearancePane(getDefaultSettings('/tmp'))
     const summary = appearanceSectionToggle(container, 'chat')?.textContent

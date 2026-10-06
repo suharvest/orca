@@ -131,7 +131,7 @@ describe('chat appearance settings card', () => {
         codeFontSize: 16,
         width: 'wide' as const,
         contrast: 130,
-        matchTerminalInterface: true,
+        matchTerminalInterface: false,
         futureSetting: 'keep'
       }
     }
@@ -160,5 +160,60 @@ describe('chat appearance settings card', () => {
     ]) {
       expect(matchesSettingsSearch(query, entries), query).toBe(true)
     }
+  })
+
+  it('disables only terminal-controlled rows while matching and restores saved values off', async () => {
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      nativeChatAppearance: {
+        fontSize: 18,
+        codeFontSize: 16,
+        contrast: 125,
+        matchTerminalInterface: true
+      }
+    }
+    const updateSettings = persistInMock(settings)
+    const { rerender } = render(
+      <AppearanceChatSection settings={settings} updateSettings={updateSettings} />
+    )
+    expect(screen.getAllByText('Set by terminal interface.')).toHaveLength(3)
+    expect(screen.getByRole('spinbutton', { name: 'Text size' }).hasAttribute('disabled')).toBe(
+      true
+    )
+    expect(
+      screen.getByRole('spinbutton', { name: 'Code text size' }).hasAttribute('disabled')
+    ).toBe(true)
+    expect(screen.getByRole('slider', { name: 'Contrast' }).hasAttribute('data-disabled')).toBe(
+      true
+    )
+    expect(
+      screen.getByRole('switch', { name: 'Match terminal interface' }).hasAttribute('disabled')
+    ).toBe(false)
+    fireEvent.click(screen.getByRole('radio', { name: 'Wide' }))
+    await waitFor(() => expect(mocks.state.settings?.nativeChatAppearance?.width).toBe('wide'))
+    expect(mocks.state.settings?.nativeChatAppearance).toMatchObject({
+      fontSize: 18,
+      codeFontSize: 16,
+      contrast: 125
+    })
+    rerender(
+      <AppearanceChatSection settings={mocks.state.settings!} updateSettings={updateSettings} />
+    )
+    fireEvent.click(screen.getByRole('switch', { name: 'Match terminal interface' }))
+    await waitFor(() =>
+      expect(mocks.state.settings?.nativeChatAppearance?.matchTerminalInterface).toBeUndefined()
+    )
+    rerender(
+      <AppearanceChatSection settings={mocks.state.settings!} updateSettings={updateSettings} />
+    )
+    expect(screen.queryByText('Set by terminal interface.')).toBeNull()
+    expect(screen.getByRole('spinbutton', { name: 'Text size' }).getAttribute('value')).toBe('18')
+    expect(screen.getByRole('spinbutton', { name: 'Code text size' }).getAttribute('value')).toBe(
+      '16'
+    )
+    expect(screen.getByRole('slider', { name: 'Contrast' }).getAttribute('aria-valuenow')).toBe(
+      '125'
+    )
+    expect(screen.getByRole('radio', { name: 'Wide' }).getAttribute('aria-checked')).toBe('true')
   })
 })

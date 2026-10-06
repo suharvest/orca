@@ -239,7 +239,8 @@
         "softer": "Softer",
         "sharper": "Sharper",
         "terminalInterfaceSummary": "Terminal interface",
-        "contrastSummary": "Contrast {{value0}}"
+        "contrastSummary": "Contrast {{value0}}",
+        "terminalControlledHint": "Set by terminal interface."
       }
     },
     "browser": {

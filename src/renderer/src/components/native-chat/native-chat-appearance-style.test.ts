@@ -43,7 +43,7 @@ describe('nativeChatAppearanceStyle terminal interface', () => {
       const style = nativeChatAppearanceStyle(settings)
       expect(style['--chat-font-family']).toBe(buildFontFamily(terminalFontFamily))
       expect(style['--chat-code-font-family']).toBe(buildFontFamily(terminalFontFamily))
-      expect(style['--chat-code-font-size']).toBe('12px')
+      expect(style['--chat-code-font-size']).toBe(`${settings.terminalFontSize}px`)
     }
   })
 
@@ -92,9 +92,9 @@ describe('nativeChatAppearanceStyle terminal interface', () => {
     const colors = resolveConfiguredTerminalColors(settings, true)
     expect(style['--chat-source-background']).toBe(colors.background)
     expect(style['--chat-source-foreground']).toBe(colors.foreground)
-    expect(style['--chat-foreground-mix']).toBe('82%')
+    expect(style['--chat-foreground-mix']).toBe('100%')
     expect(style['--chat-code-base']).toBe('var(--chat-canvas)')
-    expect(style['--chat-strong-mix']).toBe('92%')
+    expect(style['--chat-strong-mix']).toBe('100%')
   })
 
   it('follows the separate light theme and system theme changes', () => {
@@ -110,7 +110,7 @@ describe('nativeChatAppearanceStyle terminal interface', () => {
       resolveConfiguredTerminalColors(settings, false).background
     )
     expect(light['--chat-source-background']).not.toBe(dark['--chat-source-background'])
-    expect(light['--chat-foreground-mix']).toBe('82%')
+    expect(light['--chat-foreground-mix']).toBe('100%')
   })
 
   it('uses app light contrast without matching and removes matching overrides when off', () => {
@@ -123,6 +123,38 @@ describe('nativeChatAppearanceStyle terminal interface', () => {
     expect(style['--chat-foreground-mix']).toBe('64%')
     expect(style['--chat-font-family']).toBeUndefined()
     expect(style['--chat-canvas-mix']).toBeUndefined()
+  })
+
+  it('uses live terminal size and full foreground while matching, then restores saved chat sizes and contrast', () => {
+    const settings = makeSettings({
+      terminalFontSize: 17,
+      nativeChatAppearance: {
+        fontSize: 20,
+        codeFontSize: 10,
+        contrast: 50,
+        matchTerminalInterface: true
+      }
+    })
+    const matched = nativeChatAppearanceStyle(settings, 384)
+    expect(matched).toMatchObject({
+      '--chat-font-size': '17px',
+      '--chat-code-font-size': '17px',
+      '--chat-inline-code-ratio': '1em',
+      '--chat-foreground-mix': '100%',
+      '--chat-estimated-line-height': (22 * 17) / 14
+    })
+    expect(
+      nativeChatAppearanceStyle({ ...settings, terminalFontSize: 18 })['--chat-font-size']
+    ).toBe('18px')
+    const restored = nativeChatAppearanceStyle({
+      ...settings,
+      nativeChatAppearance: { ...settings.nativeChatAppearance, matchTerminalInterface: false }
+    })
+    expect(restored).toMatchObject({
+      '--chat-font-size': '20px',
+      '--chat-code-font-size': '10px',
+      '--chat-foreground-mix': '56%'
+    })
   })
 })
 

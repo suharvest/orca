@@ -275,6 +275,7 @@ type NumberFieldProps = {
   placeholder?: string
   suffix?: string
   className?: string
+  disabled?: boolean
 }
 
 export function ColorField({
@@ -323,7 +324,8 @@ export function NumberField({
   onClear,
   placeholder,
   suffix,
-  className
+  className,
+  disabled = false
 }: NumberFieldProps): React.JSX.Element {
   const [draft, setDraft] = useState(Number.isFinite(value) ? String(value) : '')
   const [prevValue, setPrevValue] = useState(value)
@@ -335,6 +337,9 @@ export function NumberField({
   }
 
   const commit = (): void => {
+    if (disabled) {
+      return
+    }
     const trimmed = draft.trim()
     if (trimmed === '') {
       if (onClear) {
@@ -376,6 +381,7 @@ export function NumberField({
         <div className="flex items-center gap-2">
           <Input
             type="number"
+            disabled={disabled}
             min={min}
             max={max}
             step={step}

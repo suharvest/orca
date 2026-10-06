@@ -76,7 +76,8 @@
         "softer": "更柔和",
         "sharper": "更清晰",
         "terminalInterfaceSummary": "终端外观",
-        "contrastSummary": "对比度 {{value0}}"
+        "contrastSummary": "对比度 {{value0}}",
+        "terminalControlledHint": "由终端界面设置。"
       }
     },
     "browser": {

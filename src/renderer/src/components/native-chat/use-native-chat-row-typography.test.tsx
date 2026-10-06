@@ -40,33 +40,35 @@ describe('memoized transcript row typography', () => {
     expect(resolveColors).toHaveBeenCalledTimes(1)
     expect(matchMedia).toHaveBeenCalledTimes(initialMediaReads)
     const renders = rendered.mock.calls.length
+    const terminalSizeSettings = { ...settings, terminalFontSize: settings.terminalFontSize + 1 }
     act(() =>
       useAppStore.setState({
-        settings: { ...settings, terminalFontSize: settings.terminalFontSize + 1 }
+        settings: terminalSizeSettings
       })
     )
-    expect(rendered).toHaveBeenCalledTimes(renders)
-    expect(resolveColors).toHaveBeenCalledTimes(1)
+    expect(rendered).toHaveBeenCalledTimes(renders + 1)
+    expect(result.current.typography.lineHeightPx).toBe((22 * 15) / 14)
+    expect(resolveColors).toHaveBeenCalledTimes(2)
     act(() =>
       useAppStore.setState({
         settings: {
-          ...settings,
+          ...terminalSizeSettings,
           nativeChatAppearance: { matchTerminalInterface: true, fontSize: 20 }
         }
       })
     )
-    expect(result.current.typography.lineHeightPx).toBe((22 * 20) / 14)
-    expect(resolveColors).toHaveBeenCalledTimes(2)
+    expect(result.current.typography.lineHeightPx).toBe((22 * 15) / 14)
+    expect(resolveColors).toHaveBeenCalledTimes(3)
     const node = document.createElement('div')
     vi.spyOn(node, 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ width: 384 }))
     act(() => result.current.measureContent(node))
-    expect(result.current.typography.charsPerLine).toBe(35)
-    expect(resolveColors).toHaveBeenCalledTimes(3)
+    expect(result.current.typography.charsPerLine).toBe(46)
+    expect(resolveColors).toHaveBeenCalledTimes(4)
     const measured = result.current.typography
     vi.mocked(node.getBoundingClientRect).mockReturnValue(DOMRect.fromRect({ width: 399 }))
     act(() => result.current.measureContent(node))
     expect(result.current.typography).toBe(measured)
-    expect(resolveColors).toHaveBeenCalledTimes(3)
+    expect(resolveColors).toHaveBeenCalledTimes(4)
     act(() => result.current.measureContent(null))
   })
 

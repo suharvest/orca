@@ -47,6 +47,7 @@ describe('NativeChatStructuredSession', () => {
           contrast: 120
         },
         terminalFontFamily: 'Consolas',
+        terminalFontSize: 16,
         terminalColorOverrides: { background: '#112233', foreground: '#ddeeff' }
       }
     })
@@ -68,9 +69,9 @@ describe('NativeChatStructuredSession', () => {
     expect(root?.style.getPropertyValue('--chat-source-foreground')).toBe('#ddeeff')
     expect(root?.style.getPropertyValue('--chat-code-font-family')).toContain('Consolas')
     expect(root?.style.getPropertyValue('--chat-font-family')).toContain('Consolas')
-    expect(root?.style.getPropertyValue('--chat-foreground-mix')).toBe('86.8%')
-    expect(root?.style.getPropertyValue('--chat-font-size')).toBe('18px')
-    expect(root?.style.getPropertyValue('--chat-code-font-size')).toBe('11px')
+    expect(root?.style.getPropertyValue('--chat-foreground-mix')).toBe('100%')
+    expect(root?.style.getPropertyValue('--chat-font-size')).toBe('16px')
+    expect(root?.style.getPropertyValue('--chat-code-font-size')).toBe('16px')
     expect(root?.style.getPropertyValue('--chat-content-max-width')).toBe('60rem')
     act(() =>
       useAppStore.setState({
@@ -118,9 +119,14 @@ describe('NativeChatStructuredSession', () => {
         settings: { ...settings, terminalFontSize: settings.terminalFontSize + 1 }
       })
     )
-    expect(resolveColors).toHaveBeenCalledTimes(initialResolutions)
-    act(() => useAppStore.setState({ settings: { ...settings, terminalFontFamily: 'Menlo' } }))
     expect(resolveColors).toHaveBeenCalledTimes(initialResolutions + 1)
+    expect(
+      view.container
+        .querySelector<HTMLElement>('[data-native-chat-root]')
+        ?.style.getPropertyValue('--chat-font-size')
+    ).toBe(`${settings.terminalFontSize + 1}px`)
+    act(() => useAppStore.setState({ settings: { ...settings, terminalFontFamily: 'Menlo' } }))
+    expect(resolveColors).toHaveBeenCalledTimes(initialResolutions + 2)
     expect(
       view.container
         .querySelector<HTMLElement>('[data-native-chat-root]')
