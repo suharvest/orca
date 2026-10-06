@@ -112,7 +112,7 @@ export function removeStaleRuntimeHookTrustEntries(
 export function removeSystemManagedHookTrustEntries(
   systemHomePath: string,
   sourcePaths: readonly [string, ...string[]],
-  codexHashes: readonly CodexHookHashes[] = []
+  codexHashes: readonly CodexHookHashes[]
 ): void {
   removeCodexManagedHookTrustEntries({
     codexHashes,
