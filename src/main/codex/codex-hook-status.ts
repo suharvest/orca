@@ -1,7 +1,16 @@
+import { existsSync, readFileSync } from 'node:fs'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { readHooksJson } from '../agent-hooks/installer-utils'
-import { readHookTrustEntries, type CodexHookTrustState } from './config-toml-trust'
 import {
+  assertLoadableHookTrustConfig,
+  isCodexConfigTomlRefusedError,
+  readHookTrustEntries,
+  upsertHookTrustEntriesInContent,
+  type CodexHookTrustState,
+  type CodexTrustEntry
+} from './config-toml-trust'
+import {
+  buildCodexManagedHook,
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,
   getManagedCommand,
@@ -10,20 +19,90 @@ import {
 import {
   approvalsAtOrcaEntries,
   findOrcaEntrySlots,
-  getManagedCodexHookHome
+  getManagedCodexHookHome,
+  type CodexHookHome
 } from './codex-hook-orca-approvals'
 import type { CodexHookAnswer } from './codex-hook-trust-derivation'
+import { readKnownCodexHookAnswer } from './codex-hook-hash-lookup'
+import { resolveCodexHookStatusHome } from './codex-hook-reconcile'
+import {
+  getRealHomeConfigTomlPath,
+  getRealHomeHookKeySourcePaths,
+  getRealHomeHooksJsonPath,
+  readRealHomeHooksFileShapeProblem
+} from './codex-real-home-hooks-json'
+
 
 /**
- * Codex hook status for a managed home, read from its files: Orca's entry in
- * each event Codex lists, and that entry's approval holding Codex's own hash.
- * Without Codex's answer, the reason it is missing.
+ * Status for `runtimeHomePath`, or for the home the next native pane gets when
+ * none is named (~/.codex outside the app), against what Codex last answered.
  */
+export function readCurrentCodexHookStatus(runtimeHomePath?: string): AgentHookInstallStatus {
+  const answer = readKnownCodexHookAnswer()
+  if (runtimeHomePath !== undefined) {
+    return readCodexHookHomeStatus(runtimeHomePath, answer)
+  }
+  const home = resolveCodexHookStatusHome()
+  if (home.kind === 'unknown') {
+    return {
+      agent: 'codex',
+      state: 'error',
+      configPath: getRealHomeHooksJsonPath(),
+      managedHooksPresent: false,
+      detail: "The selected Codex account's home is not available yet"
+    }
+  }
+  if (home.kind === 'real') {
+    return readRealHomeCodexHookStatus(answer)
+  }
+  const status = readCodexHookHomeStatus(home.path, answer)
+  const problem = home.realHomeSelected ? readRealHomeHooksFileShapeProblem() : null
+  // Why say it: panes moved to Orca's own Codex home because ~/.codex could not take the hook.
+  return problem
+    ? {
+        ...status,
+        detail: [`${problem}; Orca's panes use Orca's own Codex home`, status.detail]
+          .filter(Boolean)
+          .join('; ')
+      }
+    : status
+}
+
+/** Status for a managed home, read from its files. */
 export function readCodexHookHomeStatus(
   runtimeHomePath: string,
   answer: CodexHookAnswer | null
 ): AgentHookInstallStatus {
-  const home = getManagedCodexHookHome(runtimeHomePath)
+  return readHomeStatus(getManagedCodexHookHome(runtimeHomePath), answer)
+}
+
+/** Status for ~/.codex, under either spelling Codex keys it by. */
+export function readRealHomeCodexHookStatus(
+  answer: CodexHookAnswer | null
+): AgentHookInstallStatus {
+  const home: CodexHookHome = {
+    hooksJsonPath: getRealHomeHooksJsonPath(),
+    tomlPath: getRealHomeConfigTomlPath(),
+    keySourcePaths: getRealHomeHookKeySourcePaths()
+  }
+  const status = readHomeStatus(home, answer)
+  if (status.state === 'installed' || status.state === 'error') {
+    return status
+  }
+  const inline = describeInlineApprovals(home, answer)
+  // Why no re-route for it: Orca's own home mirrors the same inline approvals and fails the same way.
+  return inline ? { ...status, detail: inline } : status
+}
+
+/**
+ * Codex hook status for one home, read from its files: Orca's entry in each
+ * event Codex lists, and that entry's approval holding Codex's own hash under
+ * any spelling Codex may key the file by. Without Codex's answer, the reason.
+ */
+function readHomeStatus(
+  home: CodexHookHome,
+  answer: CodexHookAnswer | null
+): AgentHookInstallStatus {
   const configPath = home.hooksJsonPath
   const command = getManagedCommand(getManagedScriptPath())
   const status = (
@@ -103,4 +182,55 @@ export function readCodexHookHomeStatus(
   return parts.length === 0
     ? status('installed', true, null)
     : status('partial', true, parts.join('; '))
+}
+
+/**
+ * Why Orca's approvals are missing, when it is config.toml's inline approvals:
+ * adding Orca's own there would leave a file Codex cannot load. Read now.
+ */
+function describeInlineApprovals(
+  home: CodexHookHome,
+  answer: CodexHookAnswer | null
+): string | null {
+  if (!existsSync(home.tomlPath)) {
+    return null
+  }
+  const command = getManagedCommand(getManagedScriptPath())
+  const hooks = readHooksJson(home.hooksJsonPath)?.hooks
+  const slots = findOrcaEntrySlots(hooks, command)
+  const probes: CodexTrustEntry[] = CODEX_EVENTS.flatMap((eventName) => {
+    const label = CODEX_EVENT_LABEL[eventName]
+    const hash = answer?.kind === 'hashes' ? answer.hashes[label] : 'probe'
+    const definitions = hooks?.[eventName]
+    const slot = slots.get(eventName) ?? {
+      groupIndex: Array.isArray(definitions) ? definitions.length : 0,
+      handlerIndex: 0
+    }
+    return typeof hash === 'string'
+      ? [
+          {
+            sourcePath: home.keySourcePaths[0]!,
+            eventLabel: label,
+            command,
+            timeoutSec: buildCodexManagedHook(command, eventName).timeout,
+            trustedHash: hash,
+            enabled: true,
+            ...slot
+          }
+        ]
+      : []
+  })
+  try {
+    const previous = readFileSync(home.tomlPath, 'utf-8')
+    assertLoadableHookTrustConfig(
+      home.tomlPath,
+      previous,
+      upsertHookTrustEntriesInContent(previous, probes)
+    )
+    return null
+  } catch (error) {
+    return isCodexConfigTomlRefusedError(error)
+      ? `${home.tomlPath} keeps hook approvals inline, so Orca cannot add its own there; Orca shows no status for ~/.codex until they are tables`
+      : null
+  }
 }

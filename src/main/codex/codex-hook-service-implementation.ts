@@ -15,11 +15,10 @@ import {
 } from './codex-hook-local-maintenance'
 import { installCodexHooksRemote } from './codex-hook-remote-install'
 import { getManagedScript } from './codex-hook-script'
-import { readCodexHookHomeStatus } from './codex-hook-status'
+import { readCodexHookHomeStatus, readCurrentCodexHookStatus } from './codex-hook-status'
 import {
   CODEX_HOOK_LAUNCH_WAIT_MS,
   readEveryKnownCodexHookHashes,
-  readKnownCodexHookAnswer,
   resolveCodexHookAnswerForLaunch
 } from './codex-hook-hash-lookup'
 import { reconcileCodexHooks } from './codex-hook-reconcile'
@@ -197,9 +196,12 @@ export class CodexHookService {
     return wslPlan ? refreshWslRuntimeUserHooks(wslPlan) : null
   }
 
-  /** Status read from a managed home's files, against what Codex last answered. */
-  getStatus(runtimeHomePath: string = getOrcaManagedCodexHomePath()): AgentHookInstallStatus {
-    return readCodexHookHomeStatus(runtimeHomePath, readKnownCodexHookAnswer())
+  /**
+   * Status read from a home's files: the home the next native pane gets when
+   * none is named (~/.codex outside the app), else that home.
+   */
+  getStatus(runtimeHomePath?: string): AgentHookInstallStatus {
+    return readCurrentCodexHookStatus(runtimeHomePath)
   }
 
   /**
