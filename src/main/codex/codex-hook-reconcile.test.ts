@@ -67,7 +67,7 @@ import {
   startCodexHooks
 } from './codex-hook-reconcile'
 import { _internals as lookupInternals } from './codex-hook-hash-lookup'
-import { readRealHomeHooksFileShapeProblem } from './codex-real-home-hooks-json'
+import { readRealHomeHooksFileProblem } from './codex-real-home-hooks-json'
 import {
   buildCodexManagedHook,
   CODEX_EVENT_LABEL,
@@ -471,16 +471,16 @@ describe('the routing gate', () => {
     mkdirSync(codexHome(), { recursive: true })
     writeFileSync(hooksPath(), content)
 
-    expect(readRealHomeHooksFileShapeProblem()).toBe(
+    expect(readRealHomeHooksFileProblem()).toBe(
       `${hooksPath()} is not a hooks file Orca can add to`
     )
 
     writeHooks({})
-    expect(readRealHomeHooksFileShapeProblem()).toBeNull()
+    expect(readRealHomeHooksFileProblem()).toBeNull()
   })
 
   it('stays open with no hooks.json at all', () => {
-    expect(readRealHomeHooksFileShapeProblem()).toBeNull()
+    expect(readRealHomeHooksFileProblem()).toBeNull()
   })
 
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
@@ -489,7 +489,7 @@ describe('the routing gate', () => {
       writeHooks({})
       chmodSync(hooksPath(), 0o000)
 
-      expect(readRealHomeHooksFileShapeProblem()).toBeNull()
+      expect(readRealHomeHooksFileProblem()).toBeNull()
     }
   )
 
@@ -501,6 +501,6 @@ describe('the routing gate', () => {
     await start()
 
     expect(readHooks()).toEqual({})
-    expect(readRealHomeHooksFileShapeProblem()).toBeNull()
+    expect(readRealHomeHooksFileProblem()).toBeNull()
   })
 })

@@ -46,7 +46,7 @@ export class HooksJsonChangedError extends Error {
  * when it can. Only its shape counts: an unreadable file (EACCES) would fail the
  * managed home's install too, so moving launches there gains nothing.
  */
-export function readRealHomeHooksFileShapeProblem(): string | null {
+export function readRealHomeHooksFileProblem(): string | null {
   const hooksJsonPath = getRealHomeHooksJsonPath()
   const { raw, config } = readHooksJsonWithRaw(hooksJsonPath)
   if (raw === null) {

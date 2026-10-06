@@ -29,7 +29,7 @@ import { resolveCodexHookStatusHome } from './codex-hook-reconcile'
 import {
   getRealHomeHookKeySourcePaths,
   getRealHomeHooksJsonPath,
-  readRealHomeHooksFileShapeProblem
+  readRealHomeHooksFileProblem
 } from './codex-real-home-hooks-json'
 
 /**
@@ -55,7 +55,7 @@ export function readCurrentCodexHookStatus(runtimeHomePath?: string): AgentHookI
     return readRealHomeCodexHookStatus(answer)
   }
   const status = readCodexHookHomeStatus(home.path, answer)
-  const problem = home.realHomeSelected ? readRealHomeHooksFileShapeProblem() : null
+  const problem = home.realHomeSelected ? readRealHomeHooksFileProblem() : null
   // Why say it: panes moved to Orca's own Codex home because ~/.codex could not take the hook.
   return problem
     ? {

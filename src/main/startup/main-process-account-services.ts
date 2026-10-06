@@ -25,7 +25,7 @@ import { createAccountRuntimeTargetSettingsSync } from '../rate-limits/account-r
 import { normalizeCodexRuntimeSelection } from '../codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../claude-accounts/runtime-selection'
 import { agentHookServer } from '../agent-hooks/server'
-import { readRealHomeHooksFileShapeProblem } from '../codex/codex-real-home-hooks-json'
+import { readRealHomeHooksFileProblem } from '../codex/codex-real-home-hooks-json'
 import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { browserManager } from '../browser/browser-manager'
@@ -50,7 +50,7 @@ export function initializeMainProcessAccountServices(): void {
   state.codexRuntimeHome.setRealHomeLaneGate(
     () =>
       !isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex') ||
-      readRealHomeHooksFileShapeProblem() === null
+      readRealHomeHooksFileProblem() === null
   )
   state.codexSessionMigration = createCodexSessionMigrationScheduler({
     isEligible: () =>
