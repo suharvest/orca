@@ -280,7 +280,11 @@ describe('the instant tab', () => {
       paneKey: PANE_KEY
     })
     await expect(paneVerdict(runtime)).resolves.toEqual({ kind: 'proceed' })
-    expect(runtime.reportAgentLaunchPaneVerdict).not.toHaveBeenCalled()
+    // The launch settles the window's marker as it ends; nothing else is reported.
+    expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledTimes(1)
+    expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(expect.anything(), {
+      kind: 'proceed'
+    })
   })
 
   it('is not shown early for a chat-mode launch, whose tab is the session', async () => {
@@ -305,6 +309,58 @@ describe('the instant tab', () => {
     await plainLaunch(runtime, {}, CLI)
 
     expect(runtime.published).toEqual([])
+  })
+})
+
+describe('the pane while its launch delivers the prompt', () => {
+  function launchDeliveringSlowly(runtime: Host): {
+    launched: Promise<AgentLaunchResult>
+    deliver: (delivered: boolean) => void
+  } {
+    let deliver!: (delivered: boolean) => void
+    deliverTerminalAgentLaunchPrompt.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => (deliver = resolve))
+    )
+    const launched = replayLaunch(
+      runtime,
+      { paneKey: PANE_KEY, prompt: { text: 'fix the build', delivery: 'submit' } },
+      CLI
+    )
+    return { launched, deliver: (delivered) => deliver(delivered) }
+  }
+
+  it('attaches to the agent as soon as it exists, not when the prompt is delivered', async () => {
+    const runtime = hostWithWindow({ terminalPaneKey: PANE_KEY, lineCarriesPrompt: false })
+    const { launched, deliver } = launchDeliveringSlowly(runtime)
+    await vi.waitFor(() => expect(deliverTerminalAgentLaunchPrompt).toHaveBeenCalled())
+
+    const verdict = await Promise.race([
+      paneVerdict(runtime),
+      new Promise<'still waiting'>((resolve) => setTimeout(() => resolve('still waiting'), 200))
+    ])
+    expect(verdict).toEqual({ kind: 'proceed' })
+    // The window keeps its launch marker until the launch ends, so a close still reaches it.
+    expect(runtime.reportAgentLaunchPaneVerdict).not.toHaveBeenCalled()
+
+    deliver(true)
+    await expect(launched).resolves.toMatchObject({ outcome: { kind: 'terminal' } })
+    expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: 'wt-7' }),
+      { kind: 'proceed' }
+    )
+  })
+
+  it('still stops the launch as closed when its attached tab is closed before the prompt lands', async () => {
+    const runtime = hostWithWindow({ terminalPaneKey: PANE_KEY, lineCarriesPrompt: false })
+    const { launched, deliver } = launchDeliveringSlowly(runtime)
+    await vi.waitFor(() => expect(deliverTerminalAgentLaunchPrompt).toHaveBeenCalled())
+    await expect(paneVerdict(runtime)).resolves.toEqual({ kind: 'proceed' })
+
+    markAgentLaunchPaneClosedByUser({ worktreeId: 'wt-7', paneKey: PANE_KEY })
+    deliver(true)
+
+    await expect(launched).rejects.toMatchObject({ code: AGENT_LAUNCH_TAB_CLOSED_CODE })
+    expect(runtime.closeTerminal).toHaveBeenCalledWith('term_1')
   })
 })
 

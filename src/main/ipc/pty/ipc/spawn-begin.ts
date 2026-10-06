@@ -1,5 +1,8 @@
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
-import { resolveAgentLaunchPaneVerdict } from '../../../agent-launch/agent-launch-pane-attachment'
+import {
+  isAgentLaunchRunningInPane,
+  resolveAgentLaunchPaneVerdict
+} from '../../../agent-launch/agent-launch-pane-attachment'
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch-pane-verdict'
 import { agentLaunchPaneEvidence } from '../pane/agent-launch-pane-evidence'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
@@ -56,13 +59,19 @@ export async function beginPtyIpcSpawn(
           })
         )
       : null
-  if (launchVerdict && args.worktreeId && args.tabId && args.leafId) {
+  if (launchVerdict && launchPaneKey && args.worktreeId && args.tabId && args.leafId) {
     const verdict = await launchVerdict
     // The window keeps a final verdict on the tab, clears a settled one, takes a withdrawn pane back.
-    ctx.deps.runtime?.reportAgentLaunchPaneVerdict?.(
-      { worktreeId: args.worktreeId, tabId: args.tabId, leafId: args.leafId },
-      verdict
-    )
+    // A pane attaching to a launch still delivering its prompt is settled by that launch instead.
+    if (
+      verdict.kind !== 'proceed' ||
+      !isAgentLaunchRunningInPane({ worktreeId: args.worktreeId, paneKey: launchPaneKey })
+    ) {
+      ctx.deps.runtime?.reportAgentLaunchPaneVerdict?.(
+        { worktreeId: args.worktreeId, tabId: args.tabId, leafId: args.leafId },
+        verdict
+      )
+    }
     if (verdict.kind !== 'proceed') {
       throw new Error(AGENT_LAUNCH_PANE_REFUSED_CODE)
     }
