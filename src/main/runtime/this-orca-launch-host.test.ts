@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cachedPwshAvailability } from '../pwsh'
+import { cachedPwshAvailability, isPwshAvailableAsync } from '../pwsh'
 import { localLaunchArtifactsWritable } from '../providers/local-launch-artifact-directory'
 import { wslLaunchDirectoryKnownBroken } from '../providers/wsl-launch-directory-resolution'
-import { thisOrcaLaunchHost } from './this-orca-launch-host'
+import { probedThisOrcaLaunchHost, thisOrcaLaunchHost } from './this-orca-launch-host'
 
-vi.mock('../pwsh', () => ({ cachedPwshAvailability: vi.fn(() => null) }))
+vi.mock('../pwsh', () => ({
+  cachedPwshAvailability: vi.fn(() => null),
+  isPwshAvailableAsync: vi.fn(async () => true)
+}))
 vi.mock('../providers/local-launch-artifact-directory', () => ({
   localLaunchArtifactsWritable: vi.fn(() => true)
 }))
@@ -45,6 +48,25 @@ describe('the PowerShell a launch this Orca runs lands in', () => {
     expect(
       thisOrcaLaunchHost({ launchPlatform: 'win32', isRemote: true, settings }).windowsPaneShell
     ).toBeNull()
+  })
+
+  // Why: planned as an unknown shell, a PowerShell pane refused every guarded paste (QA: Qwen 4/4).
+  it('learns which PowerShell a pane will be before planning, when only the probe can tell', async () => {
+    onPlatform('win32')
+    let probed: boolean | null = null
+    vi.mocked(cachedPwshAvailability).mockImplementation(() => probed)
+    vi.mocked(isPwshAvailableAsync).mockImplementation(async () => (probed = true))
+    const host = (settings: Parameters<typeof thisOrcaLaunchHost>[0]['settings']) =>
+      probedThisOrcaLaunchHost({ launchPlatform: 'win32', isRemote: false, settings })
+
+    await expect(host({ terminalWindowsShell: 'cmd.exe' })).resolves.toMatchObject({
+      windowsPaneShell: 'cmd.exe'
+    })
+    expect(isPwshAvailableAsync).not.toHaveBeenCalled()
+    await expect(host({ terminalWindowsShell: 'powershell.exe' })).resolves.toMatchObject({
+      windowsPaneShell: 'pwsh.exe'
+    })
+    expect(isPwshAvailableAsync).toHaveBeenCalledOnce()
   })
 
   it('knows none for a launch on another platform', () => {

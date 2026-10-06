@@ -1,4 +1,4 @@
-import { cachedPwshAvailability } from '../pwsh'
+import { cachedPwshAvailability, isPwshAvailableAsync } from '../pwsh'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { localLaunchArtifactsWritable } from '../providers/local-launch-artifact-directory'
 import {
@@ -59,11 +59,32 @@ export async function probeWslLaunchFolderBeforePlanning(args: {
   }
 }
 
-/** `thisOrcaLaunchHost` for a launch of `prompt`, once its WSL folder is probed when it may be. */
+/**
+ * Learns which PowerShell a local PowerShell pane will be before the launch is planned. Unknown, the
+ * pane is planned as a shell nothing proves alone, so every guarded paste into it is refused.
+ */
+async function probePwshBeforePlanning(args: ThisOrcaLaunchHostArgs): Promise<void> {
+  if (args.isRemote || args.launchPlatform !== 'win32' || process.platform !== 'win32') {
+    return
+  }
+  const shellFor = (pwshAvailable: boolean | null) =>
+    spawnedWindowsShell({
+      settings: args.settings,
+      windowsShellOverride: args.windowsShellOverride,
+      pwshAvailable
+    })
+  if (shellFor(null) === null && shellFor(true) !== null && cachedPwshAvailability() === null) {
+    await isPwshAvailableAsync()
+  }
+}
+
+/** `thisOrcaLaunchHost` for a launch of `prompt`, once its WSL folder and PowerShell are probed when
+ *  they may be. */
 export async function probedThisOrcaLaunchHost(
   args: ThisOrcaLaunchHostArgs & { prompt?: string }
 ): Promise<LaunchHost> {
   await probeWslLaunchFolderBeforePlanning(args)
+  await probePwshBeforePlanning(args)
   return thisOrcaLaunchHost(args)
 }
 

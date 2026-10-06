@@ -70,7 +70,9 @@ export function createLaunchedAgentWriteGuard(
       unprovableHost === 'refuse' ||
       runtime.launchedAgentHostProvesAgent?.(ptyId) !== false
     ) {
-      throw new Error('agent_not_in_foreground')
+      // Why the cause: on Windows a shell in front and an unprovable pane refuse alike; the log
+      // must say which.
+      throw new Error('agent_not_in_foreground', { cause: { foreground, unprovableHost } })
     }
   }
   return { beforeWrite, dispose }
