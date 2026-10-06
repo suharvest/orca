@@ -51,9 +51,11 @@ const CODEX_HASHES: CodexHookHashes = Object.fromEntries(
 const hooksPath = (): string => join(home, '.codex', 'hooks.json')
 const tomlPath = (): string => join(home, '.codex', 'config.toml')
 
-/** Codex on PATH answers `next`; a pending answer leaves it missing. */
+/** Codex on PATH answers `next`; a pending answer removes it. */
 async function answer(next: CodexHookAnswer): Promise<void> {
-  if (next.kind !== 'pending') {
+  if (next.kind === 'pending') {
+    rmSync(mocks.codexPath)
+  } else {
     writeFileSync(mocks.codexPath, next.codexVersion)
     mocks.probeCodexVersion.mockResolvedValue(next.codexVersion)
     mocks.deriveCodexHookHashes.mockResolvedValue(next)
@@ -88,6 +90,7 @@ beforeEach(() => {
   vi.stubEnv('CODEX_HOME', '')
   mocks.homedir.mockReturnValue(home)
   mocks.codexPath = join(userData, 'codex')
+  writeFileSync(mocks.codexPath, 'codex')
   reconcileInternals.resetForTesting()
   lookupInternals.resetForTesting()
 })
