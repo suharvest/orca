@@ -53,9 +53,12 @@ import type { DaemonChildSpawnOptions } from './daemon-launched-child-spawn'
 let options: DaemonChildSpawnOptions
 let job: unknown
 let jobMode: number
+const nativePlatform = process.platform
+const originalGetuid = Object.getOwnPropertyDescriptor(process, 'getuid')
 
 beforeEach(async () => {
   vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+  Object.defineProperty(process, 'getuid', { configurable: true, value: () => 501 })
   state.root = await mkdtemp(join(tmpdir(), 'orca-mac-launch-job-'))
   state.packaged = true
   state.identity = { pid: 12345, startedAtMs: 1000, launchNonce: 'owned-launch' }
@@ -93,6 +96,11 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.restoreAllMocks()
+  if (originalGetuid) {
+    Object.defineProperty(process, 'getuid', originalGetuid)
+  } else {
+    Reflect.deleteProperty(process, 'getuid')
+  }
   vi.unstubAllEnvs()
   await rm(state.root, { recursive: true, force: true })
 })
@@ -101,7 +109,9 @@ it('launches the stable main executable and leaves no inherited credentials on d
   vi.stubEnv('ORCA_TEST_SECRET', 'test-value')
   vi.stubEnv('NODE_CHANNEL_FD', '3')
   const handle = await launchMacDaemonFromStableBundle(options)
-  expect(jobMode).toBe(0o600)
+  if (nativePlatform !== 'win32') {
+    expect(jobMode).toBe(0o600)
+  }
   expect(job).toMatchObject({
     Label: 'com.stablyai.orca.terminal.owned-launch',
     ProgramArguments: expect.arrayContaining([

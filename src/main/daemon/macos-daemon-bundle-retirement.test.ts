@@ -19,14 +19,22 @@ import {
 
 const result: ProcessResult = { code: 1, signal: null, stdout: '', stderr: '', timedOut: false }
 let root: string
+const nativePlatform = process.platform
+const originalGetuid = Object.getOwnPropertyDescriptor(process, 'getuid')
 beforeEach(async () => {
   vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+  Object.defineProperty(process, 'getuid', { configurable: true, value: () => 501 })
   root = await mkdtemp(join(tmpdir(), 'orca-runtime-retire-'))
   run.mockReset().mockResolvedValue(result)
   liveness.mockReset().mockReturnValue({ status: 'exited' })
 })
 afterEach(async () => {
   vi.restoreAllMocks()
+  if (originalGetuid) {
+    Object.defineProperty(process, 'getuid', originalGetuid)
+  } else {
+    Reflect.deleteProperty(process, 'getuid')
+  }
   await rm(root, { recursive: true, force: true })
 })
 
@@ -44,7 +52,9 @@ async function runtime(submitted = true): Promise<string> {
 
 it('writes private non-secret metadata and prunes only a stopped, unused runtime', async () => {
   const directory = await runtime()
-  expect((await stat(join(directory, 'job.json'))).mode & 0o777).toBe(0o600)
+  if (nativePlatform !== 'win32') {
+    expect((await stat(join(directory, 'job.json'))).mode & 0o777).toBe(0o600)
+  }
   expect(JSON.parse(await readFile(join(directory, 'job.json'), 'utf8'))).toEqual({
     label: 'com.stablyai.orca.terminal.owned',
     producerPid: process.pid,
