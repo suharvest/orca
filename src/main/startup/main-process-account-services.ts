@@ -25,8 +25,6 @@ import { createAccountRuntimeTargetSettingsSync } from '../rate-limits/account-r
 import { normalizeCodexRuntimeSelection } from '../codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../claude-accounts/runtime-selection'
 import { agentHookServer } from '../agent-hooks/server'
-import { readRealHomeHooksFileProblem } from '../codex/codex-real-home-hooks-json'
-import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { browserManager } from '../browser/browser-manager'
 import { mainProcessState as state } from './main-process-state'
@@ -45,13 +43,6 @@ export function initializeMainProcessAccountServices(): void {
   state.rateLimits = new RateLimitService()
   state.codexRuntimeHome = new CodexRuntimeHomeService(store)
   void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
-  // Why only a hooks.json Orca cannot add to: every consumer (PTY env, rate limits, commit
-  // messages) then uses the managed home, where status still works. Read fresh, so a fix reopens it.
-  state.codexRuntimeHome.setRealHomeLaneGate(
-    () =>
-      !isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex') ||
-      readRealHomeHooksFileProblem() === null
-  )
   state.codexSessionMigration = createCodexSessionMigrationScheduler({
     isEligible: () =>
       state.codexRuntimeHome?.isHostSystemDefaultSessionMigrationEligible() === true,

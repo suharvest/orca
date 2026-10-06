@@ -53,17 +53,7 @@ export function readCurrentCodexHookStatus(runtimeHomePath?: string): AgentHookI
   if (home.kind === 'real') {
     return readRealHomeCodexHookStatus(answer)
   }
-  const status = readCodexHookHomeStatus(home.path, answer)
-  const problem = home.realHomeSelected ? readRealHomeHooksFileProblem() : null
-  // Why say it: panes moved to Orca's own Codex home because ~/.codex could not take the hook.
-  return problem
-    ? {
-        ...status,
-        detail: [`${problem}; Orca's panes use Orca's own Codex home`, status.detail]
-          .filter(Boolean)
-          .join('; ')
-      }
-    : status
+  return readCodexHookHomeStatus(home.path, answer)
 }
 
 /** Status for a managed home, read from its files. */
@@ -77,12 +67,21 @@ export function readCodexHookHomeStatus(
 /** Status for ~/.codex, under either spelling Codex keys it by. */
 function readRealHomeCodexHookStatus(answer: CodexHookAnswer | null): AgentHookInstallStatus {
   const home = getRealHomeCodexHookHome()
+  const problem = readRealHomeHooksFileProblem()
+  if (problem) {
+    return {
+      agent: 'codex',
+      state: 'error',
+      configPath: home.hooksJsonPath,
+      managedHooksPresent: false,
+      detail: problem
+    }
+  }
   const status = readHomeStatus(home, answer)
   if (status.state === 'installed' || status.state === 'error') {
     return status
   }
   const inline = describeInlineApprovals(home, answer)
-  // Why no re-route for it: Orca's own home mirrors the same inline approvals and fails the same way.
   return inline ? { ...status, detail: inline } : status
 }
 

@@ -121,8 +121,6 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     return [...homes.values()]
   }
 
-  // Why: closed while ~/.codex/hooks.json has a shape Orca cannot add its hook to,
-  // so launches use the managed home instead of shipping status-blind panes.
   protected realHomeLaneGate: () => boolean = () => true
 
   setRealHomeLaneGate(gate: () => boolean): void {

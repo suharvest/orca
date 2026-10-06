@@ -94,16 +94,14 @@ export function reconcileCodexHooksForLaunch(): Promise<void> {
  */
 export function resolveCodexHookStatusHome():
   | { kind: 'real' }
-  | { kind: 'managed'; path: string; realHomeSelected: boolean }
+  | { kind: 'managed'; path: string }
   | { kind: 'unknown' } {
   if (!config) {
     return { kind: 'real' }
   }
   try {
     const path = config.resolveLaunchHome()
-    return path === null
-      ? { kind: 'real' }
-      : { kind: 'managed', path, realHomeSelected: config.usesRealHome() }
+    return path === null ? { kind: 'real' } : { kind: 'managed', path }
   } catch {
     return { kind: 'unknown' }
   }

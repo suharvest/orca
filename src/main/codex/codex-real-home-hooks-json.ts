@@ -41,25 +41,23 @@ export class HooksJsonChangedError extends Error {
   }
 }
 
-/**
- * Why ~/.codex/hooks.json cannot take Orca's entry, read from the file now; null
- * when it can. Only its shape counts: an unreadable file (EACCES) would fail the
- * managed home's install too, so moving launches there gains nothing.
- */
+/** Why ~/.codex/hooks.json cannot take Orca's entry, read from the file now; null when it can. */
 export function readRealHomeHooksFileProblem(): string | null {
   const hooksJsonPath = getRealHomeHooksJsonPath()
   const { raw, config } = readHooksJsonWithRaw(hooksJsonPath)
   if (raw === null) {
     return null
   }
-  return isAddableHooksFile(config) ? null : `${hooksJsonPath} is not a hooks file Orca can add to`
+  return isAddableHooksFile(config)
+    ? null
+    : `Orca cannot add its hook to ${hooksJsonPath}, so Orca shows no status for ~/.codex`
 }
 
-// Why: an unparseable user file is never clobbered, and Codex rejects unknown root keys.
+// Why: an unparseable user file is never clobbered, and Codex skips a file with other root keys.
 export function isAddableHooksFile(config: HooksConfig | null): config is HooksConfig {
   return (
     config !== null &&
-    Object.keys(config).every((key) => key === 'hooks') &&
+    Object.keys(config).every((key) => key === 'hooks' || key === 'description') &&
     (config.hooks === undefined || isPlainObject(config.hooks))
   )
 }

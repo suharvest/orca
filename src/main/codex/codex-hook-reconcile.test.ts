@@ -489,29 +489,36 @@ describe('while the lookup is still asking Codex', () => {
   })
 })
 
-describe('the routing gate', () => {
+describe('a ~/.codex/hooks.json Orca cannot add to', () => {
   it.each([
     ['an unparseable file', '{ not json'],
     ['unknown top-level fields', JSON.stringify({ hooks: {}, _managed: true })],
     ['a hooks value that is not an object', JSON.stringify({ hooks: [] })]
-  ])('closes for %s, and reopens once it is fixed', (_case, content) => {
-    mkdirSync(codexHome(), { recursive: true })
-    writeFileSync(hooksPath(), content)
+  ])(
+    'is left byte-for-byte and named as the reason for %s, until it is fixed',
+    async (_case, content) => {
+      mkdirSync(codexHome(), { recursive: true })
+      writeFileSync(hooksPath(), content)
 
-    expect(readRealHomeHooksFileProblem()).toBe(
-      `${hooksPath()} is not a hooks file Orca can add to`
-    )
+      await start()
 
-    writeHooks({})
-    expect(readRealHomeHooksFileProblem()).toBeNull()
-  })
+      expect(readFileSync(hooksPath(), 'utf-8')).toBe(content)
+      expect(existsSync(tomlPath())).toBe(false)
+      expect(readRealHomeHooksFileProblem()).toBe(
+        `Orca cannot add its hook to ${hooksPath()}, so Orca shows no status for ~/.codex`
+      )
 
-  it('stays open with no hooks.json at all', () => {
+      writeHooks({})
+      expect(readRealHomeHooksFileProblem()).toBeNull()
+    }
+  )
+
+  it('is not the case with no hooks.json at all', () => {
     expect(readRealHomeHooksFileProblem()).toBeNull()
   })
 
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'stays open for an unreadable hooks.json',
+    'is not the case for an unreadable hooks.json',
     () => {
       writeHooks({})
       chmodSync(hooksPath(), 0o000)
@@ -520,7 +527,7 @@ describe('the routing gate', () => {
     }
   )
 
-  it('stays open after a write Orca could not make', async () => {
+  it('is not the case after a write Orca could not make', async () => {
     writeHooks({})
     writeFileSync(tomlPath(), 'model = "m"\nhooks = { state = {} }\n')
     vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -528,6 +535,22 @@ describe('the routing gate', () => {
     await start()
 
     expect(readHooks()).toEqual({})
+    expect(readRealHomeHooksFileProblem()).toBeNull()
+  })
+})
+
+describe("a ~/.codex/hooks.json with Codex's description key", () => {
+  it('takes the entry and keeps the description verbatim', async () => {
+    mkdirSync(codexHome(), { recursive: true })
+    writeFileSync(hooksPath(), JSON.stringify({ description: 'My hooks — keep me', hooks: {} }))
+
+    await start()
+
+    const written = JSON.parse(readFileSync(hooksPath(), 'utf-8'))
+    expect(written.description).toBe('My hooks — keep me')
+    expect(
+      written.hooks.Stop.map((group: Hooks[string][number]) => group.hooks[0]!.command)
+    ).toEqual([command()])
     expect(readRealHomeHooksFileProblem()).toBeNull()
   })
 })

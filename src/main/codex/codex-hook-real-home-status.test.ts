@@ -150,21 +150,26 @@ describe('Codex hook status for ~/.codex', () => {
     })
   })
 
-  it("reports on Orca's own home, and says why, while hooks.json moves panes there", async () => {
+  it.each([
+    ['an unparseable file', '{ not json'],
+    ['unknown top-level fields', JSON.stringify({ hooks: {}, _managed: true })]
+  ])('reports on ~/.codex, and says why there is no status, for %s', async (_case, content) => {
     await answer({ kind: 'hashes', codexVersion: 'codex-cli 0.160.1', hashes: CODEX_HASHES })
     mkdirSync(join(home, '.codex'), { recursive: true })
-    writeFileSync(hooksPath(), '{ not json')
-    const managedHome = join(userData, 'codex-runtime-home', 'home')
+    writeFileSync(hooksPath(), content)
     startCodexHooks({
       isEnabled: () => false,
       usesRealHome: () => true,
-      resolveLaunchHome: () => managedHome,
+      resolveLaunchHome: () => null,
       pathReady: Promise.resolve()
     })
 
-    expect(status()).toMatchObject({
-      configPath: join(managedHome, 'hooks.json'),
-      detail: `${hooksPath()} is not a hooks file Orca can add to; Orca's panes use Orca's own Codex home`
+    expect(status()).toEqual({
+      agent: 'codex',
+      state: 'error',
+      configPath: hooksPath(),
+      managedHooksPresent: false,
+      detail: `Orca cannot add its hook to ${hooksPath()}, so Orca shows no status for ~/.codex`
     })
   })
 
