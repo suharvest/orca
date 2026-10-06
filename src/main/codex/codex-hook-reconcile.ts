@@ -4,7 +4,7 @@ import { computeOrcaCodexHookHashes } from './codex-hook-definition'
 import {
   CODEX_HOOK_LAUNCH_WAIT_MS,
   readEveryKnownCodexHookHashes,
-  resolveCodexHookHashes,
+  resolveCodexHookAnswer,
   startCodexHookHashLookup
 } from './codex-hook-hash-lookup'
 import type { CodexHookAnswer } from './codex-hook-trust-derivation'
@@ -137,7 +137,7 @@ async function reconcileOnce(request: {
   if (!current?.isEnabled() || !(request.realHomeLaunch || current.usesRealHome())) {
     return
   }
-  const lookup = resolveCodexHookHashes()
+  const lookup = resolveCodexHookAnswer()
   const answer = await withTimeout<CodexHookAnswer | null>(lookup, ANSWER_WAIT_MS, null)
   if (!answer && !rerunOnAnswer) {
     // Why: the stopgap below goes in now, as main's did; Codex's hash replaces it once it answers.

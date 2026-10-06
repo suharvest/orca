@@ -31,7 +31,7 @@ import { CodexHookService } from './codex-hook-service-implementation'
 import { _internals as reconcileInternals, startCodexHooks } from './codex-hook-reconcile'
 import {
   _internals as lookupInternals,
-  resolveCodexHookHashes,
+  resolveCodexHookAnswer,
   startCodexHookHashLookup
 } from './codex-hook-hash-lookup'
 import { reconcileRealHomeCodexHookEntries } from './codex-real-home-hook-install'
@@ -59,7 +59,7 @@ async function answer(next: CodexHookAnswer): Promise<void> {
     mocks.deriveCodexHookHashes.mockResolvedValue(next)
   }
   startCodexHookHashLookup({ pathReady: Promise.resolve(), isEnabled: () => false })
-  await resolveCodexHookHashes()
+  await resolveCodexHookAnswer()
 }
 
 async function writeOrcaEntry(hashes: CodexHookHashes | null): Promise<void> {
