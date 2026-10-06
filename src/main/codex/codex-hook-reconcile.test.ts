@@ -243,6 +243,38 @@ describe('reconcileCodexHooks', () => {
     expect(mocks.realHomeRuns).toBe(2)
   })
 
+  it('runs once for one spawn, however many env builders it goes through', async () => {
+    await start()
+    mocks.realHomeRuns = 0
+
+    scheduleCodexHookReconcile()
+    scheduleCodexHookReconcile()
+    scheduleCodexHookReconcile()
+    await settleSpawn()
+
+    expect(mocks.realHomeRuns).toBe(1)
+  })
+
+  it('lets a spawn ride a reconcile already running, which reads the files after it', async () => {
+    await start()
+    mocks.realHomeRuns = 0
+    let release!: () => void
+    mocks.holdRealHome = new Promise((resolve) => {
+      release = resolve
+    })
+    const running = reconcileCodexHooks()
+    await vi.waitFor(() => expect(mocks.realHomeRuns).toBe(1))
+
+    scheduleCodexHookReconcile()
+    await new Promise((resolve) => setImmediate(resolve))
+    mocks.holdRealHome = null
+    release()
+    await running
+    await settleSpawn()
+
+    expect(mocks.realHomeRuns).toBe(1)
+  })
+
   it("leaves an older build's entry alone on a pane spawn, and converts it at app start", async () => {
     enabled = false
     await start()

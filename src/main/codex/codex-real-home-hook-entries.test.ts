@@ -308,6 +308,35 @@ describe('reconcileRealHomeCodexHookEntries', () => {
     expect(trustAt(orca)).toEqual({ trustedHash: CODEX_HASHES.pre_tool_use, enabled: true })
   })
 
+  it('moves an entry alone in a matcher group out, since Codex hashes the matcher', async () => {
+    const matched: HookDefinition = {
+      matcher: 'Bash',
+      hooks: [buildCodexManagedHook(frozen(), 'PreToolUse')]
+    }
+    writeHooks({ hooks: { PreToolUse: [matched] } })
+
+    expect(await reconcile()).toBe('written')
+
+    expect(readHooks().hooks.PreToolUse).toEqual([
+      { hooks: [buildCodexManagedHook(frozen(), 'PreToolUse')] }
+    ])
+  })
+
+  it("keeps the approval of this build's copy in an event left to an older build", async () => {
+    writeHooks({ hooks: { Stop: [orcaGroup(olderBuildCommand()), orcaGroup()] } })
+    const approved = {
+      ...stopEntryAt(1, orcaGroup()),
+      trustedHash: CODEX_HASHES.stop,
+      enabled: true
+    }
+    upsertHookTrustEntries(configPath(), [approved])
+
+    await reconcile({ convertOlderForms: false })
+
+    expect(readHooks().hooks.Stop).toEqual([orcaGroup(olderBuildCommand()), orcaGroup()])
+    expect(trustAt(approved)).toEqual({ trustedHash: CODEX_HASHES.stop, enabled: true })
+  })
+
   it('rewrites an edited entry in place and approves what it wrote', async () => {
     const edited: HookDefinition = {
       hooks: [{ ...buildCodexManagedHook(frozen(), 'Stop'), timeout: 99 }]

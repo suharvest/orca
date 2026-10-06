@@ -264,11 +264,11 @@ export async function removeRealHomeCodexHookForOptOut(
 ): Promise<'removed' | 'unavailable'> {
   try {
     return await runExclusivelyForCodexTrustConfig(getRealHomeConfigTomlPath(), async () => {
-      const lane = await sweepRealHomeCodexHook(codexHashes)
+      const lane = await sweepRealHomeCodexHook()
       // Why 'removed' only: an unread or malformed file may still hold the entry,
       // so its approvals and the ledger that proves ownership wait for a later pass.
       if (lane === 'removed') {
-        // Why: approvals can outlive a sweep that found no entry left to remove.
+        // Why: Codex's own hashes prove Orca's approvals, including ones a sweep with no entry left to remove skips.
         removeSystemManagedHookTrustEntries(
           getSystemCodexHomePath(),
           getRealHomeHookKeySourcePaths(),
