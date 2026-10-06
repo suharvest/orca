@@ -14,6 +14,7 @@ import {
 } from './daemon-launched-child'
 import { getDaemonEntryPath, probeDaemonSocket as probeSocket } from './daemon-launch-paths'
 import { materializeRelocatedDaemonHost } from './daemon-host-relocation'
+import { launchMacDaemonFromStableBundle } from './macos-daemon-launchd'
 import { DAEMON_RECOVERY_BUDGET_MS, daemonRecoveryProbeTimeoutMs } from './daemon-recovery-budget'
 import { cleanupDaemonForProtocol } from './daemon-protocol-cleanup'
 import {
@@ -60,7 +61,8 @@ export function createOutOfProcessLauncher(
     const entryPath = getDaemonEntryPath()
     // Why here: everything up to the fork is one recovery, so the adoption connect and the
     // preflight's probes share a single absolute budget rather than each carrying its own.
-    const recoveryDeadlineMs = Date.now() + DAEMON_RECOVERY_BUDGET_MS
+    const launchStartedAtMs = Date.now()
+    const recoveryDeadlineMs = launchStartedAtMs + DAEMON_RECOVERY_BUDGET_MS
     const pidPath = suppliedPidPath ?? getDaemonPidPath(runtimeDir)
     const launchNonce = suppliedLaunchNonce ?? randomUUID()
     // One-shot: whichever launch consumes it owns the attribution, so a later unrelated launch can't
@@ -117,6 +119,23 @@ export function createOutOfProcessLauncher(
       }
 
       const userDataPath = getAppEnvironment().getPath('userData')
+      const macHandle = await launchMacDaemonFromStableBundle(
+        {
+          entryPath,
+          forkEntryPath: entryPath,
+          userDataPath,
+          socketPath,
+          tokenPath,
+          pidPath,
+          launchNonce,
+          macosLoginSessionWatch
+        },
+        // Leave five seconds of the desktop's 60-second PTY gate for adapter installation.
+        launchStartedAtMs + 55_000
+      )
+      if (macHandle) {
+        return macHandle
+      }
       // Why: on win32 packaged, stage a daemon-host copy in userData so its image escapes the NSIS updater's kill zone; lazy so it's off first-paint. Fail-open: null → in-dir host.
       const relocatedHost = materializeRelocatedDaemonHost()
       // Fork the relocated entry when available; otherwise the install-dir entry.

@@ -65,6 +65,9 @@ vi.mock('node:child_process', () => ({
 vi.mock('../macos-full-disk-access-status', () => ({
   getMacosFullDiskAccessStatus: getMacosFullDiskAccessStatusMock
 }))
+vi.mock('../daemon/daemon-full-disk-access-status', () => ({
+  getTerminalHostsFullDiskAccessStatus: async () => 'denied'
+}))
 
 import type { DeveloperPermissionState } from '../../shared/developer-permissions-types'
 import { registerDeveloperPermissionHandlers } from './developer-permissions'
@@ -166,7 +169,8 @@ describe('registerDeveloperPermissionHandlers', () => {
 
     await expect(handler?.()).resolves.toContainEqual({
       id: 'full-disk-access',
-      status: 'granted'
+      status: 'granted',
+      terminalHostStatus: 'denied'
     })
   })
 

@@ -21747,6 +21747,105 @@
         "Collect cross-platform and provider soak evidence with no weakened identity, transaction or bounded-work assertions."
       ],
       "demotionRule": "Keep experimental until soak and platform evidence; investigate failures without weakening ownership, late recovery, or zero-write retry evidence."
+    },
+    {
+      "id": "terminal.macos-tcc-update-identity",
+      "title": "Protected terminal reads survive macOS app-bundle replacement",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "daemon-native-signing-and-provider-contract",
+      "surfaces": [
+        "packaged macOS daemon launch",
+        "signed bundle retirement",
+        "Full Disk Access status",
+        "current and legacy terminal preservation"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime", "mobile"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["daemon"],
+      "coverageNotes": "Native signed arm64 macOS FDA/update-gap and protected cwd/Apple Git evidence. Mocked Linux/Windows/Node/SSH launch guards. Remote and mobile paths unchanged. Older daemons degrade to unknown. Physical x64/older macOS/non-APFS and individual-folder-only grants are untested.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/13921"],
+      "invariant": "A macOS daemon owns a complete verified signed bundle outside the updater and has independent Orca responsibility. Observation failures never authorize runtime removal or live-session replacement. Settings never infer terminal access from app access.",
+      "oracle": "Reproduce persistent EPERM for a cold detached Helper during a source-path gap, retain FDA in the independent daemon, then retain one authenticated production daemon through 22 protected cwd/file/Git/FDA PTY checks across two signed replacements and reconnect. Deterministic ownership, cleanup and deadline tests preserve unknown states and foreign endpoints.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts src/main/daemon/daemon-full-disk-access-status.test.ts src/main/daemon/daemon-pty-adapter-full-disk-access.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs src/renderer/src/components/settings/DeveloperPermissionsPane.test.tsx",
+        "ORCA_BACKGROUND_LAUNCH=1 python3 tests/tools/macos-tcc-update/run.py --identity '<matching Developer ID>' --output notes/tcc-update-results.json",
+        "ORCA_BACKGROUND_LAUNCH=1 python3 tests/tools/macos-tcc-update/product.py --identity '<matching Developer ID>' --output notes/tcc-product-results.json"
+      ],
+      "testFiles": [
+        "src/main/daemon/macos-daemon-bundle.test.ts",
+        "src/main/daemon/macos-daemon-launchd.test.ts",
+        "src/main/daemon/macos-daemon-job-state.test.ts",
+        "src/main/daemon/macos-daemon-bundle-retirement.test.ts",
+        "src/main/daemon/daemon-full-disk-access-status.test.ts",
+        "src/main/daemon/daemon-pty-adapter-full-disk-access.test.ts",
+        "config/scripts/macos-folder-usage-descriptions.test.mjs",
+        "src/renderer/src/components/settings/DeveloperPermissionsPane.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/macos-daemon-launchd.test.ts",
+          "assertions": [
+            "rejects a foreign endpoint and stops only the job it created",
+            "does not submit a daemon after the startup gate deadline expires"
+          ]
+        },
+        {
+          "file": "src/main/daemon/macos-daemon-bundle-retirement.test.ts",
+          "assertions": [
+            "retains a possibly in-flight submission when its job is absent",
+            "bounds expensive inspection to twenty copies per collection"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-06",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon",
+          "result": "passed",
+          "durationSeconds": 44.39,
+          "summary": "2396 tests passed across 212 files; 15 tests and 3 files skipped. Existing adoption, restart, current/legacy session preservation and new launch/retirement/status contracts."
+        },
+        {
+          "date": "2026-10-06",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 python3 tests/tools/macos-tcc-update/product.py --identity '<matching Developer ID>' --output notes/tcc-product-results.json",
+          "result": "passed",
+          "durationSeconds": 6.82,
+          "summary": "Actual Helper packaging hook, unchanged main/Helper designated requirements, three signed versions and actual rebuilt protocol-41 daemon. All 22 protected PTY checks pass with the same daemon through two gaps, deleted old bundles, fresh terminals and reconnect. Duration is cold launcher portion only."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "Deterministic focused tests; native signing harness needs release credentials and has no CI p95."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local deterministic tests and signed native experiments; cross-platform soak pending."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Signed detached-Helper experiment persistently fails with EPERM during and after the path gap while fresh restored Helper and independent main daemon pass. Actual stable product launch passes 22 PTY checks. No revert-and-run of the whole product diff or multi-release soak."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Adoption bypasses copying. New GUI daemon launch clones once, verifies asynchronously and shares a 55-second deadline before the 60-second PTY gate. Background retirement coalesces per root and limits native probes to 20 records, rotating past retained copies; no timers or per-terminal scans. Local final cold-launch observation 6.82 seconds, not a latency guarantee. Regular-copy/non-APFS overhead unmeasured."
+      },
+      "knownGaps": [
+        "Physical x64, older supported macOS releases, GUI ShipIt quit/relaunch, logout/login and notarized release Gatekeeper coverage remain release-lane work.",
+        "Individual folder grants without FDA and Local Network/Accessibility/Automation are outside the measured FDA reproduction.",
+        "Unverifiable file use or bootstrap and a crash before metadata can retain an orphan runtime. Non-APFS copies consume a full bundle."
+      ],
+      "promotionCriteria": [
+        "Run signed x64/arm64 release journeys on supported macOS versions and add stable soak history without weakening unknown/ownership safeguards."
+      ],
+      "demotionRule": "Keep experimental until native release and soak evidence; retain code on unexplained inspection failures."
     }
   ]
 }
