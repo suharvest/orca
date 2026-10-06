@@ -359,6 +359,65 @@ describe('reconcileCodexHooks', () => {
   })
 })
 
+describe('while the lookup is still asking Codex', () => {
+  function holdDerivation(): () => void {
+    let release!: () => void
+    const answered = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    mocks.deriveCodexHookHashes.mockImplementation(async () => {
+      await answered
+      return { kind: 'hashes', codexVersion: 'codex-cli 0.161.0', hashes: CODEX_HASHES }
+    })
+    mocks.probeCodexVersion.mockResolvedValue('codex-cli 0.161.0')
+    return release
+  }
+
+  const stopApproval = (): string | undefined =>
+    readHookTrustEntries(tomlPath()).get(
+      computeTrustKey({
+        sourcePath: hooksPath(),
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: command()
+      })
+    )?.trustedHash
+
+  it("writes the entry with Orca's own hash within a launch's wait, then Codex's once it answers", async () => {
+    enabled = false
+    await start()
+    enabled = true
+    const release = holdDerivation()
+
+    const startedAt = Date.now()
+    await reconcileCodexHooksWithin(3_000, { realHomeLaunch: true })
+
+    expect(Date.now() - startedAt).toBeLessThan(3_000)
+    expect(stopApproval()).toBe(computeOrcaCodexHookHashes().stop)
+
+    release()
+    await vi.waitFor(() => expect(stopApproval()).toBe(CODEX_HASHES.stop))
+  })
+
+  it('writes nothing while an entry is already in place', async () => {
+    await start()
+    const before = snapshot(codexHome())
+    // Why new bytes: a Codex update the lookup has not asked about yet.
+    writeFileSync(mocks.codexPath, 'codex 0.161.0')
+    const release = holdDerivation()
+
+    await reconcileCodexHooksWithin(3_000, { realHomeLaunch: true })
+    expect(snapshot(codexHome())).toEqual(before)
+
+    const runsBeforeAnswer = mocks.realHomeRuns
+    release()
+    await vi.waitFor(() => expect(mocks.realHomeRuns).toBe(runsBeforeAnswer + 1))
+    await _internals.settledForTesting()
+    expect(snapshot(codexHome())).toEqual(before)
+  })
+})
+
 describe('the routing gate', () => {
   it.each([
     ['an unparseable file', '{ not json'],
