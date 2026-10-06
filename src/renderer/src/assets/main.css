@@ -577,6 +577,7 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
     var(--chat-source-foreground) var(--chat-user-border-mix),
     transparent
   );
+  --chat-code-foreground: color-mix(in srgb, var(--chat-source-foreground) 85%, var(--chat-canvas));
   --chat-code-surface: color-mix(
     in srgb,
     var(--chat-source-foreground) var(--chat-code-mix),

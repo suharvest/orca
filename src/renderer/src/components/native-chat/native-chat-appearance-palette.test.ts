@@ -90,6 +90,10 @@ describe('matching chat surfaces with opposite app schemes', () => {
     expect(matched.getPropertyValue('--chat-source-foreground')).toBe(
       terminalScheme === 'light' ? '#000000' : '#ffffff'
     )
+    const codeForeground = matched.getPropertyValue('--chat-code-foreground')
+    expect(codeForeground).toContain(`${terminalScheme === 'light' ? '#000000' : '#ffffff'} 85%`)
+    expect(codeForeground).toContain(terminalScheme === 'light' ? '#ffffff' : '#000000')
+    expect(codeForeground).not.toContain(appScheme === 'dark' ? '#fafafa' : '#0a0a0a')
     const outside = getComputedStyle(document.documentElement)
     const appStatus = statusRoles.map((role) => outside.getPropertyValue(role))
     const chatStatus = statusRoles.map((role) => matched.getPropertyValue(role))
