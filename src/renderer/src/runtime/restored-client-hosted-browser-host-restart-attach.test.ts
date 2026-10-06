@@ -188,11 +188,32 @@ describe('ensureBrowserClientHostOnRuntimeContact', () => {
     const restored = ensureBrowserClientHostsForRestoredPages(
       stateWith({ 'page-1': { environmentId: 'env-a', restoredClientHosted: true } })
     )
-    const restarted = ensureBrowserClientHostOnRuntimeContact(state, 'env-a')
+    const restarted = ensureBrowserClientHostOnRuntimeContact(state, 'env-a', true)
     releaseFirst()
     await Promise.all([restored, restarted])
 
     expect(preparedEnvironmentIds()).toEqual(['env-a', 'env-a'])
+  })
+
+  // Why: regained contact on the same runtime leaves the in-flight preparation current.
+  it('coalesces plain regained contact into an in-flight preparation', async () => {
+    const state = stateWith({ 'page-1': { environmentId: 'env-a', placement: CLIENT_PLACEMENT } })
+    let releaseFirst = (): void => {}
+    prepareBrowserClientHostPlacement.mockImplementationOnce(
+      async () =>
+        new Promise((resolve) => {
+          releaseFirst = () => resolve({ kind: 'server' as const })
+        })
+    )
+
+    const restored = ensureBrowserClientHostsForRestoredPages(
+      stateWith({ 'page-1': { environmentId: 'env-a', restoredClientHosted: true } })
+    )
+    const regained = ensureBrowserClientHostOnRuntimeContact(state, 'env-a')
+    releaseFirst()
+    await Promise.all([restored, regained])
+
+    expect(preparedEnvironmentIds()).toEqual(['env-a'])
   })
 })
 

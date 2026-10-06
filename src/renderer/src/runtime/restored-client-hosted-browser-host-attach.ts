@@ -43,12 +43,14 @@ export async function ensureBrowserClientHostsForRestoredPages(
  */
 export async function ensureBrowserClientHostOnRuntimeContact(
   state: RestoredBrowserHandleSource,
-  environmentId: string
+  environmentId: string,
+  runtimeRestarted = false
 ): Promise<void> {
   if (!hasLiveClientHostedPage(state, environmentId)) {
     return
   }
-  await prepareBrowserClientHost(environmentId, true)
+  // Only a restart outdates an in-flight preparation; plain contact can coalesce into it.
+  await prepareBrowserClientHost(environmentId, runtimeRestarted)
 }
 
 async function prepareBrowserClientHost(
