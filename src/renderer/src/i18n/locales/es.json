@@ -17728,7 +17728,9 @@
         "imagePreview": "Vista previa de la imagen a tamaño completo",
         "workspaceAttachmentMismatch": "Los archivos solo se pueden adjuntar a su espacio de trabajo de origen.",
         "attachmentOwnerChanged": "Este espacio de trabajo cambió de host durante la conexión; vuelve a soltar los archivos.",
-        "attachmentUnreadable": "No se pudieron leer los archivos soltados."
+        "attachmentUnreadable": "No se pudieron leer los archivos soltados.",
+        "pasteFailed": "Error al pegar.",
+        "commandAttachmentsUnsupported": "Quita los archivos adjuntos antes de usar un comando de la sesión de chat."
       },
       "tool": {
         "running": "Ejecutando…",
@@ -18024,7 +18026,9 @@
         "details": "Detalles",
         "plan": "Plan",
         "historyRepaired": "No se pudo cargar parte del historial de este chat.",
-        "historyItemTooLarge": "Esta parte del chat era demasiado grande para mostrarla."
+        "historyItemTooLarge": "Esta parte del chat era demasiado grande para mostrarla.",
+        "dismiss": "Descartar",
+        "copyError": "Copiar error"
       },
       "providerFrame": {
         "byteLength": "{{value0}} bytes"

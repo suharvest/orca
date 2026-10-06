@@ -10,6 +10,8 @@ import type { NativeChatApprovalCardProps } from './NativeChatApprovalCard'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 import type { NativeChatLaunchSeed } from './native-chat-composer-types'
+import type { NativeChatComposerNotice } from './native-chat-composer-notice'
+import { NativeChatComposerNotices } from './NativeChatComposerNotices'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 import type { StructuredAgentSessionThreadGoal } from './use-structured-agent-session-thread-goal'
 import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch'
@@ -118,6 +120,7 @@ export function createStructuredSessionMocks() {
       structuredTransport?: Record<string, unknown>
       isWorking?: boolean
       onStop?: () => void
+      notices?: readonly NativeChatComposerNotice[]
     }>(),
     approvalCardProps: initialApprovalCardProps,
     questionCardProps: null as NativeChatQuestionCardProps | null,
@@ -308,7 +311,13 @@ export function createStructuredSessionMocks() {
           pasteFromClipboard: mocks.pasteFromClipboard,
           contains: (node: Node | null) => fieldRef.current?.contains(node) === true
         }))
-        return <textarea ref={fieldRef} data-testid="structured-composer" />
+        // The real composer draws the chat's notices above its input.
+        return (
+          <>
+            <NativeChatComposerNotices notices={props?.notices ?? []} />
+            <textarea ref={fieldRef} aria-label="Message" data-testid="structured-composer" />
+          </>
+        )
       })
     }),
     nativeChatEmptyState: () => ({ NativeChatEmptyState: () => null }),

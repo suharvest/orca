@@ -1,3 +1,4 @@
+import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
 import type { StructuredAgentContextUsage } from '../../../../shared/structured-agent-session-context-usage'
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session-wire'
@@ -31,7 +32,8 @@ export type NativeChatStructuredComposerTransport = {
   worktreeId?: string
   /** Present only where the host can set this session's goal. */
   threadGoal?: { setObjective: (objective: string) => Promise<boolean> }
-  onError: (message: string | null) => void
+  /** `errorText` is error text Orca did not write, shown apart and copyable. */
+  onError: (message: string | null, errorText?: string) => void
   runtime: 'local' | 'remote'
   /** The session behind this composer; a real user send relinquishes orchestration ownership. */
   sessionId: string
@@ -85,6 +87,8 @@ export type NativeChatComposerProps = {
   /** Cmd/Ctrl+Enter from an empty composer: send the newest queued draft now.
    *  False = nothing queued, and the chord falls through to a plain send. */
   steerQueued?: () => boolean
+  /** The chat's own notices, shown in the composer's notice card above its input. */
+  notices?: readonly NativeChatComposerNotice[]
 }
 
 /** Launch context prefilled into the TUI input as an unsent draft, plus the two

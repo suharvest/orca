@@ -2,13 +2,14 @@ import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
 import { useLayoutEffect, useRef } from 'react'
-import { ImageOff } from 'lucide-react'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
 import { NativeChatMentionHint, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
+import { NativeChatComposerNotices } from './NativeChatComposerNotices'
+import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
 import { nativeChatComposerPlaceholder } from './native-chat-composer-target'
 import type {
@@ -34,7 +35,7 @@ export type NativeChatComposerFieldProps = {
   canSend: boolean
   autocomplete: ComposerAutocomplete
   activeSuggestion: number
-  notice: string | null
+  notices: readonly NativeChatComposerNotice[]
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   sendButtonDisabled: boolean
   /** Why the send button is disabled, when the user can do something about it. */
@@ -113,7 +114,7 @@ export function NativeChatComposerField({
   canSend,
   autocomplete,
   activeSuggestion,
-  notice,
+  notices,
   imageAttachments,
   sendButtonDisabled,
   sendBlockedReason,
@@ -195,12 +196,7 @@ export function NativeChatComposerField({
           {autocomplete.mode === 'mention' ? (
             <NativeChatMentionHint query={autocomplete.query} onAccept={onAcceptMention} />
           ) : null}
-          {notice ? (
-            <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <ImageOff className="size-3.5 shrink-0" />
-              <span>{notice}</span>
-            </div>
-          ) : null}
+          <NativeChatComposerNotices notices={notices} className="mb-1.5" />
           <div
             data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
             data-composer-scope-key={dropScopeKey}

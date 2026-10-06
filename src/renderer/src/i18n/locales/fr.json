@@ -17827,7 +17827,9 @@
         "imagePreviewUnavailable": "Aperçu indisponible",
         "workspaceAttachmentMismatch": "Les fichiers ne peuvent être joints qu'à leur espace de travail source.",
         "attachmentOwnerChanged": "Cet espace de travail a changé d'hôte lors de la connexion : supprimez à nouveau les fichiers.",
-        "attachmentUnreadable": "Impossible de lire les fichiers supprimés."
+        "attachmentUnreadable": "Impossible de lire les fichiers supprimés.",
+        "pasteFailed": "Échec du collage.",
+        "commandAttachmentsUnsupported": "Retirez les pièces jointes avant d'utiliser une commande de session de chat."
       },
       "tool": {
         "running": "En cours…",
@@ -18024,7 +18026,9 @@
         "details": "Détails",
         "plan": "Plan",
         "historyRepaired": "Une partie de l'historique de ce chat n'a pas pu être chargée.",
-        "historyItemTooLarge": "Cette partie du chat était trop volumineuse pour être affichée."
+        "historyItemTooLarge": "Cette partie du chat était trop volumineuse pour être affichée.",
+        "dismiss": "Ignorer",
+        "copyError": "Copier l'erreur"
       },
       "providerFrame": {
         "byteLength": "{{value0}} octets"

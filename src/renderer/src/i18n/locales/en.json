@@ -17916,7 +17916,9 @@
         "details": "Details",
         "plan": "Plan",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
-        "historyItemTooLarge": "This part of the chat was too large to show."
+        "historyItemTooLarge": "This part of the chat was too large to show.",
+        "dismiss": "Dismiss",
+        "copyError": "Copy error"
       },
       "composer": {
         "imageUnsupported": "Image paste is not supported for this agent.",
@@ -17988,7 +17990,9 @@
         "imagePreviewUnavailable": "Preview unavailable",
         "workspaceAttachmentMismatch": "Files can only be attached to their source workspace.",
         "attachmentOwnerChanged": "This workspace changed hosts while attaching — drop the files again.",
-        "attachmentUnreadable": "Couldn't read the dropped files."
+        "attachmentUnreadable": "Couldn't read the dropped files.",
+        "pasteFailed": "Paste failed.",
+        "commandAttachmentsUnsupported": "Remove attachments before using a chat-session command."
       },
       "tool": {
         "exitCode": "exit {{value0}}",
