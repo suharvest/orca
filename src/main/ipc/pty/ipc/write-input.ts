@@ -62,13 +62,11 @@ export function createPtyWriteInput(deps: {
     const chunks = iterateTerminalInputChunks(data)
     const first = chunks.next()
     if (first.done) {
-      provider.write(id, data)
-      return true
+      return provider.write(id, data) !== false
     }
     const second = chunks.next()
     if (second.done) {
-      provider.write(id, first.value)
-      return true
+      return provider.write(id, first.value) !== false
     }
     return writePtyProviderInputChunks(provider, id, chunks, first.value, second.value)
   }
@@ -155,6 +153,20 @@ export function createPtyWriteInput(deps: {
     runtime?.terminalRunFacts?.recordInput(args.id, args.inputKind, args.data)
   }
 
+  const writeAndObserveInput = (
+    provider: IPtyProvider,
+    args: PtyWritePayload
+  ): boolean | Promise<boolean> => {
+    const observe = (accepted: boolean): boolean => {
+      if (accepted && args.inputKind === 'driving' && ptyOwnership.get(args.id) === null) {
+        runtime?.observeClaudeTerminalEvidence?.(args.id, { kind: 'input', data: args.data })
+      }
+      return accepted
+    }
+    const result = writePtyProviderInput(provider, args.id, args.data)
+    return typeof result === 'boolean' ? observe(result) : result.then(observe)
+  }
+
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
     // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
     if (runtime?.getDriver(args.id).kind === 'mobile') {
@@ -166,7 +178,7 @@ export function createPtyWriteInput(deps: {
     }
     try {
       noteRendererPtyInput(args)
-      return writePtyProviderInput(provider, args.id, args.data)
+      return writeAndObserveInput(provider, args)
     } catch {
       return false
     }
@@ -186,7 +198,7 @@ export function createPtyWriteInput(deps: {
     }
     try {
       noteRendererPtyInput(args)
-      return writePtyProviderInput(provider, args.id, args.data)
+      return writeAndObserveInput(provider, args)
     } catch {
       return false
     }

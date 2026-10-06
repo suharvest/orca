@@ -13,10 +13,17 @@ vi.mock('../provider/registry', () => ({
   tryGetProviderForPty: (id: string) => (id === PTY_ID ? provider : undefined)
 }))
 
-function createWriteInput(facts: TerminalRunFactsRegister) {
-  const runtime = { getDriver: () => ({ kind: 'desktop' }), terminalRunFacts: facts }
+function createWriteInput(
+  facts: TerminalRunFactsRegister,
+  observeClaudeTerminalEvidence = vi.fn()
+) {
+  const runtime = {
+    getDriver: () => ({ kind: 'desktop' }),
+    terminalRunFacts: facts,
+    observeClaudeTerminalEvidence
+  }
   const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: write input reads only getDriver and terminalRunFacts from the runtime, and isDestroyed/webContents from the window.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stubs implement every runtime and window member this writer reads.
   return createPtyWriteInput({ mainWindow: mainWindow as never, runtime: runtime as never })
 }
 
@@ -30,6 +37,37 @@ afterEach(() => {
 })
 
 describe('renderer PTY writes: input kind', () => {
+  it.each(['writePtyInput', 'writePtyInputAccepted'] as const)(
+    '%s observes Escape only after a successful local write',
+    async (writer) => {
+      const observe = vi.fn()
+      const input = createWriteInput(new TerminalRunFactsRegister(), observe)
+      provider.write.mockImplementation(() => {
+        expect(observe).not.toHaveBeenCalled()
+        return true
+      })
+      expect(await input[writer]({ id: PTY_ID, data: '\x1b', inputKind: 'driving' })).toBe(true)
+      expect(observe).toHaveBeenCalledWith(PTY_ID, { kind: 'input', data: '\x1b' })
+      observe.mockClear()
+      provider.write.mockReturnValue(false)
+      expect(await input[writer]({ id: PTY_ID, data: '\x1b', inputKind: 'driving' })).toBe(false)
+      expect(observe).not.toHaveBeenCalled()
+      provider.write.mockImplementation(() => {
+        throw new Error('PTY unavailable')
+      })
+      expect(await input[writer]({ id: PTY_ID, data: '\x1b', inputKind: 'driving' })).toBe(false)
+      expect(observe).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not turn a client-side SSH handoff into host evidence', async () => {
+    ptyOwnership.set(PTY_ID, 'ssh-connection')
+    const observe = vi.fn()
+    const input = createWriteInput(new TerminalRunFactsRegister(), observe)
+    expect(await input.writePtyInput({ id: PTY_ID, data: '\x1b', inputKind: 'driving' })).toBe(true)
+    expect(observe).not.toHaveBeenCalled()
+  })
+
   it.each(['writePtyInput', 'writePtyInputAccepted'] as const)(
     '%s records driving input before the provider write',
     async (writer) => {
