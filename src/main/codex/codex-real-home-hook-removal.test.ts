@@ -82,7 +82,7 @@ afterEach(() => {
 
 describe('removeRealHomeCodexHookForOptOut', () => {
   it('creates nothing when the user has no ~/.codex', async () => {
-    expect(await removeRealHomeCodexHookForOptOut()).toBe('removed')
+    expect(await removeRealHomeCodexHookForOptOut([])).toBe('removed')
     expect(existsSync(join(home, '.codex'))).toBe(false)
   })
 
@@ -93,7 +93,7 @@ describe('removeRealHomeCodexHookForOptOut', () => {
     writeCodexTrustGrantLedgerHome(join(home, '.codex'), { binary: null, entries: {} })
     writeFileSync(hooksJsonPath(), '{ not json', 'utf-8')
 
-    expect(await removeRealHomeCodexHookForOptOut()).toBe('unavailable')
+    expect(await removeRealHomeCodexHookForOptOut([])).toBe('unavailable')
 
     // The entry may still be there, so its trust and the ownership proof must be too.
     expect(readFileSync(hooksJsonPath(), 'utf-8')).toBe('{ not json')
@@ -104,7 +104,7 @@ describe('removeRealHomeCodexHookForOptOut', () => {
   it('keeps everything when hooks.json cannot be read', async () => {
     mkdirSync(hooksJsonPath(), { recursive: true })
 
-    expect(await removeRealHomeCodexHookForOptOut()).toBe('unavailable')
+    expect(await removeRealHomeCodexHookForOptOut([])).toBe('unavailable')
   })
 
   it('removes only hash-proven Orca trust from a mixed hook group', async () => {
@@ -133,7 +133,7 @@ describe('removeRealHomeCodexHookForOptOut', () => {
     ]
     writeFileSync(configTomlPath(), upsertHookTrustEntriesInContent('', entries), 'utf-8')
 
-    expect(await removeRealHomeCodexHookForOptOut()).toBe('removed')
+    expect(await removeRealHomeCodexHookForOptOut([])).toBe('removed')
 
     expect(readHooks().hooks?.Stop).toEqual([
       { hooks: [{ type: 'command', command: userCommand }] }
@@ -162,7 +162,7 @@ describe('removeRealHomeCodexHookForOptOut', () => {
       { ...afterAt(2), trustedHash: 'sha256:user-approved' }
     ])
 
-    expect(await removeRealHomeCodexHookForOptOut()).toBe('removed')
+    expect(await removeRealHomeCodexHookForOptOut([])).toBe('removed')
 
     expect(readHooks().hooks?.Stop).toEqual([{ hooks: [before] }, { hooks: [after] }])
     const trust = readHookTrustEntries(configTomlPath())

@@ -15,6 +15,7 @@ import {
 import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import type * as InstallerUtils from '../agent-hooks/installer-utils'
 import type * as RealHomeHooksJson from './codex-real-home-hooks-json'
 import { wrapPosixHookCommand, type HookDefinition } from '../agent-hooks/installer-utils'
@@ -116,6 +117,7 @@ function identity(path: string): { raw: string; ino: number; mtimeMs: number } {
   return { raw: readFileSync(path, 'utf-8'), ino: stat.ino, mtimeMs: stat.mtimeMs }
 }
 
+/** Runs the reconcile; 'unchanged' when it touched neither ~/.codex file. */
 async function reconcile(
   options: {
     hashes?: CodexHookHashes | null
@@ -123,18 +125,24 @@ async function reconcile(
     convertOlderForms?: boolean
     knownOrcaHashes?: CodexHookHashes[]
   } = {}
-): Promise<string> {
+): Promise<'written' | 'unchanged'> {
   const hashes = options.hashes === undefined ? CODEX_HASHES : options.hashes
   if (options.userDataPath) {
     vi.stubEnv('ORCA_USER_DATA_PATH', options.userDataPath)
   }
-  return reconcileRealHomeCodexHookEntries({
+  const before = codexFileIdentities()
+  await reconcileRealHomeCodexHookEntries({
     hashes,
     // Why Codex's hashes too: the app's lookup holds the answer an earlier run wrote.
     knownOrcaHashes: options.knownOrcaHashes ?? [computeOrcaCodexHookHashes(), CODEX_HASHES],
     isEnabled: () => true,
     convertOlderForms: options.convertOlderForms ?? true
   })
+  return isDeepStrictEqual(codexFileIdentities(), before) ? 'unchanged' : 'written'
+}
+
+function codexFileIdentities(): (ReturnType<typeof identity> | null)[] {
+  return [hooksPath(), configPath()].map((path) => (existsSync(path) ? identity(path) : null))
 }
 
 function stopEntryAt(groupIndex: number, definition: HookDefinition): CodexTrustEntry {
@@ -462,7 +470,7 @@ describe('reconcileRealHomeCodexHookEntries', () => {
     writeFileSync(hooksPath(), typeof content === 'string' ? content : JSON.stringify(content))
     const before = identity(hooksPath())
 
-    expect(await reconcile()).toBe('unavailable')
+    expect(await reconcile()).toBe('unchanged')
 
     expect(identity(hooksPath())).toEqual(before)
     expect(existsSync(configPath())).toBe(false)
@@ -474,14 +482,13 @@ describe('reconcileRealHomeCodexHookEntries', () => {
     writeFileSync(configPath(), inline)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    const result = await reconcileRealHomeCodexHookEntries({
+    await reconcileRealHomeCodexHookEntries({
       hashes: CODEX_HASHES,
       knownOrcaHashes: [],
       isEnabled: () => true,
       convertOlderForms: true
     })
 
-    expect(result).toBe('unavailable')
     expect(readFileSync(hooksPath(), 'utf-8')).toBe(original)
     expect(readFileSync(configPath(), 'utf-8')).toBe(inline)
   })
@@ -491,7 +498,7 @@ describe('reconcileRealHomeCodexHookEntries', () => {
     writeFileSync(join(userData, 'codex-real-home-hooks'), 'blocks the backup folder')
     vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    expect(await reconcile()).toBe('unavailable')
+    await reconcile()
 
     expect(readFileSync(hooksPath(), 'utf-8')).toBe(original)
     expect(readHookTrustEntries(configPath()).size).toBe(0)

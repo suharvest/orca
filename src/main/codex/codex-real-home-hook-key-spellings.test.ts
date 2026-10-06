@@ -60,8 +60,8 @@ function stopEntry(sourcePath: string, groupIndex = 0): CodexTrustEntry {
   }
 }
 
-async function reconcile(): Promise<string> {
-  return reconcileRealHomeCodexHookEntries({
+async function reconcile(): Promise<void> {
+  await reconcileRealHomeCodexHookEntries({
     hashes: CODEX_HASHES,
     knownOrcaHashes: [],
     isEnabled: () => true,
@@ -124,7 +124,7 @@ describe('both spellings of a symlinked ~/.codex', () => {
   it("approves under both keys, and the opt-out removes both by Codex's hash", async () => {
     const resolvedHooks = linkCodexHomeToDotfiles()
 
-    expect(await reconcile()).toBe('written')
+    await reconcile()
 
     const spelled = stopEntry(hooksPath())
     const resolved = stopEntry(resolvedHooks)
@@ -137,7 +137,9 @@ describe('both spellings of a symlinked ~/.codex', () => {
       trustedHash: CODEX_HASHES.stop,
       enabled: true
     })
-    expect(await reconcile()).toBe('unchanged')
+    const approved = readFileSync(tomlPath(), 'utf-8')
+    await reconcile()
+    expect(readFileSync(tomlPath(), 'utf-8')).toBe(approved)
 
     expect(await removeRealHomeCodexHookForOptOut([CODEX_HASHES])).toBe('removed')
 
@@ -163,7 +165,7 @@ describe('both spellings of a symlinked ~/.codex', () => {
       { ...afterAt(resolvedHooks, 1), trustedHash: 'sha256:user-resolved' }
     ])
 
-    expect(await reconcile()).toBe('written')
+    await reconcile()
 
     const trust = readHookTrustEntries(tomlPath())
     expect(trust.get(computeTrustKey(afterAt(hooksPath(), 0)))?.trustedHash).toBe(
@@ -195,7 +197,7 @@ describe('both spellings of a symlinked ~/.codex', () => {
       { ...afterAt(resolvedHooks, 1), trustedHash: 'sha256:user-resolved' }
     ])
 
-    expect(await removeRealHomeCodexHookForOptOut()).toBe('removed')
+    expect(await removeRealHomeCodexHookForOptOut([])).toBe('removed')
 
     const trust = readHookTrustEntries(tomlPath())
     expect(trust.get(computeTrustKey(afterAt(hooksPath(), 0)))?.trustedHash).toBe(
@@ -239,7 +241,7 @@ describe('both spellings of a symlinked ~/.codex', () => {
     writeFileSync(tomlPath(), original)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    expect(await reconcile()).toBe('unavailable')
+    await reconcile()
 
     expect(readFileSync(tomlPath(), 'utf-8')).toBe(original)
     expect(JSON.parse(readFileSync(hooksPath(), 'utf-8'))).toEqual({ hooks: {} })

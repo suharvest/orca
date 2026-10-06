@@ -289,11 +289,11 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
       vi.stubEnv('USERPROFILE', home)
       vi.stubEnv('CODEX_HOME', '')
       vi.stubEnv('ORCA_USER_DATA_PATH', join(home, 'user-data'))
-      expect(await reconcileRealHome()).toBe('written')
+      await reconcileRealHome()
     }
 
-    async function reconcileRealHome(): Promise<string> {
-      return reconcileRealHomeCodexHookEntries({
+    async function reconcileRealHome(): Promise<void> {
+      await reconcileRealHomeCodexHookEntries({
         hashes,
         knownOrcaHashes: [],
         isEnabled: () => true,
@@ -340,7 +340,7 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
       )
       expect(listings.every((listing) => listing.trustStatus === 'trusted')).toBe(true)
       expect(listings.every((listing) => listing.enabled !== false)).toBe(true)
-      expect(await reconcileRealHome()).toBe('unchanged')
+      await reconcileRealHome()
       expect(files.map((file) => readFileSync(file, 'utf-8'))).toEqual(before)
     })
 
@@ -351,7 +351,7 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
       ])
       expect((await listedStop(0))?.enabled).toBe(false)
 
-      expect(await reconcileRealHome()).toBe('written')
+      await reconcileRealHome()
 
       expect(await listedStop(0)).toMatchObject({ trustStatus: 'trusted', enabled: true })
     })
@@ -364,7 +364,7 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
       writeFileSync(hooksPath, `${JSON.stringify(file, null, 2)}\n`)
       expect((await listedStop(1))?.trustStatus).not.toBe('trusted')
 
-      expect(await reconcileRealHome()).toBe('written')
+      await reconcileRealHome()
 
       expect((await listedStop(1))?.trustStatus).toBe('trusted')
       expect((await realHomeListings()).every((listing) => listing.trustStatus === 'trusted')).toBe(
@@ -381,7 +381,7 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
       file.hooks.Stop.unshift({ hooks: [{ type: 'command', command: 'true' }] })
       writeFileSync(join(realCodexHome(), 'hooks.json'), `${JSON.stringify(file, null, 2)}\n`)
 
-      expect(await reconcileRealHome()).toBe('unavailable')
+      await reconcileRealHome()
 
       expect(readFileSync(tomlPath, 'utf-8')).toBe(inline)
       // Why: Codex refuses to start at all with a config.toml it cannot load.

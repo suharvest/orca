@@ -45,14 +45,6 @@ import {
   type CodexTrustEntry
 } from './config-toml-trust'
 
-/**
- * - 'unchanged': Orca's entries and their approvals were already as wanted; nothing written.
- * - 'written': this call wrote approvals, entries, or both.
- * - 'unavailable': ~/.codex could not take Orca's approved entry.
- * - 'disabled': hooks were off when the lane came free; nothing written.
- */
-export type RealHomeCodexHookOutcome = 'unchanged' | 'written' | 'unavailable' | 'disabled'
-
 type ReconcileArgs = {
   /** Codex's hashes; null while Codex has not answered, when Orca keeps or computes its own. */
   hashes: CodexHookHashes | null
@@ -74,19 +66,16 @@ const MAX_PASSES = 4
  * what differs; an approval goes in before its entry and is taken back if the
  * entry write fails. Never throws.
  */
-export async function reconcileRealHomeCodexHookEntries(
-  args: ReconcileArgs
-): Promise<RealHomeCodexHookOutcome> {
+export async function reconcileRealHomeCodexHookEntries(args: ReconcileArgs): Promise<void> {
   try {
-    return await runExclusivelyForCodexTrustConfig(getSystemCodexConfigTomlPath(), async () => {
+    await runExclusivelyForCodexTrustConfig(getSystemCodexConfigTomlPath(), async () => {
       for (let pass = 0; pass < MAX_PASSES; pass += 1) {
         if (!args.isEnabled()) {
-          return 'disabled'
+          return
         }
         try {
-          const outcome = reconcilePass(args)
-          if (outcome !== 'pruned') {
-            return outcome
+          if (reconcilePass(args) === 'settled') {
+            return
           }
         } catch (error) {
           // Why: a user's save landed between Orca's read and write; the next pass reads it.
@@ -99,18 +88,18 @@ export async function reconcileRealHomeCodexHookEntries(
     })
   } catch (error) {
     console.warn('[codex-real-home-hooks] could not reconcile Orca entries in ~/.codex:', error)
-    return 'unavailable'
   }
 }
 
-function reconcilePass(args: ReconcileArgs): RealHomeCodexHookOutcome | 'pruned' {
+/** 'pruned' when another pass must settle what this one left; else 'settled', even when ~/.codex cannot take the entry. */
+function reconcilePass(args: ReconcileArgs): 'settled' | 'pruned' {
   const { hooksJsonPath, tomlPath, keySourcePaths: sourcePaths } = getRealHomeCodexHookHome()
   const hooksWritePath = resolveHooksJsonWritePath(hooksJsonPath)
   // Why: the pre-write guard compares against these bytes; a separate later
   // read would let a concurrent save land between parse and write.
   const { raw: previousRaw, config } = readHooksJsonWithRaw(hooksJsonPath)
   if (!isAddableHooksFile(config)) {
-    return 'unavailable'
+    return 'settled'
   }
   const hooks = config.hooks ?? {}
   const material = getCodexManagedHookInstallMaterial()
@@ -173,7 +162,7 @@ function reconcilePass(args: ReconcileArgs): RealHomeCodexHookOutcome | 'pruned'
     findMissingCodexHookApprovals(approvals, trustStates).length === 0 &&
     findStale(trustStates).length === 0
   ) {
-    return 'unchanged'
+    return 'settled'
   }
 
   writeManagedScript(material.scriptPath, material.script)
@@ -194,7 +183,7 @@ function reconcilePass(args: ReconcileArgs): RealHomeCodexHookOutcome | 'pruned'
     // Why still written: the entry and its approval are in place; a leftover approval matches no hook.
     console.warn('[codex-real-home-hooks] could not drop stale Orca approvals:', error)
   }
-  return 'written'
+  return 'settled'
 }
 
 /**
@@ -231,7 +220,7 @@ function findStaleOrcaApprovals(
  * Never throws.
  */
 export async function removeRealHomeCodexHookForOptOut(
-  codexHashes: readonly CodexHookHashes[] = []
+  codexHashes: readonly CodexHookHashes[]
 ): Promise<'removed' | 'unavailable'> {
   try {
     return await runExclusivelyForCodexTrustConfig(getSystemCodexConfigTomlPath(), async () => {
