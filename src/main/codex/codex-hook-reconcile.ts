@@ -138,7 +138,7 @@ async function reconcileOnce(request: Required<ReconcileRequest>): Promise<void>
     void lookup.then(() => reconcileCodexHooks({ realHomeLaunch: request.realHomeLaunch }))
   }
   if (answer?.kind === 'refused') {
-    // Why nothing: this Codex cannot approve Orca's entry (no hooks/list); status says to update it.
+    // Why nothing: this Codex version cannot approve Orca's entry; status says why.
     return
   }
   await reconcileRealHomeCodexHookEntries({
