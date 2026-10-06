@@ -125,13 +125,14 @@ async function reconcile(
   } = {}
 ): Promise<string> {
   const hashes = options.hashes === undefined ? CODEX_HASHES : options.hashes
+  if (options.userDataPath) {
+    vi.stubEnv('ORCA_USER_DATA_PATH', options.userDataPath)
+  }
   return reconcileRealHomeCodexHookEntries({
     hashes,
     // Why Codex's hashes too: the app's lookup holds the answer an earlier run wrote.
     knownOrcaHashes: options.knownOrcaHashes ?? [computeOrcaCodexHookHashes(), CODEX_HASHES],
-    computedHashes: computeOrcaCodexHookHashes(),
     isEnabled: () => true,
-    userDataPath: options.userDataPath ?? userData,
     convertOlderForms: options.convertOlderForms ?? true
   })
 }
@@ -172,6 +173,7 @@ beforeEach(() => {
   mocks.beforeHooksJsonGuard = null
   mocks.hooksJsonWrites = 0
   vi.stubEnv('CODEX_HOME', '')
+  vi.stubEnv('ORCA_USER_DATA_PATH', userData)
 })
 
 afterEach(() => {
@@ -475,9 +477,7 @@ describe('reconcileRealHomeCodexHookEntries', () => {
     const result = await reconcileRealHomeCodexHookEntries({
       hashes: CODEX_HASHES,
       knownOrcaHashes: [],
-      computedHashes: computeOrcaCodexHookHashes(),
       isEnabled: () => true,
-      userDataPath: userData,
       convertOlderForms: true
     })
 

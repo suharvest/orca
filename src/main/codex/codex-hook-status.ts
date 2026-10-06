@@ -14,20 +14,19 @@ import {
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,
   getManagedCommand,
-  getManagedScriptPath,
-  getSystemCodexConfigTomlPath
+  getManagedScriptPath
 } from './codex-hook-definition'
 import {
   approvalsAtOrcaEntries,
   findOrcaEntrySlots,
   getManagedCodexHookHome,
+  getRealHomeCodexHookHome,
   type CodexHookHome
 } from './codex-hook-orca-approvals'
 import type { CodexHookAnswer } from './codex-hook-trust-derivation'
 import { readKnownCodexHookAnswer } from './codex-hook-hash-lookup'
 import { resolveCodexHookStatusHome } from './codex-hook-reconcile'
 import {
-  getRealHomeHookKeySourcePaths,
   getRealHomeHooksJsonPath,
   readRealHomeHooksFileProblem
 } from './codex-real-home-hooks-json'
@@ -76,14 +75,8 @@ export function readCodexHookHomeStatus(
 }
 
 /** Status for ~/.codex, under either spelling Codex keys it by. */
-export function readRealHomeCodexHookStatus(
-  answer: CodexHookAnswer | null
-): AgentHookInstallStatus {
-  const home: CodexHookHome = {
-    hooksJsonPath: getRealHomeHooksJsonPath(),
-    tomlPath: getSystemCodexConfigTomlPath(),
-    keySourcePaths: getRealHomeHookKeySourcePaths()
-  }
+function readRealHomeCodexHookStatus(answer: CodexHookAnswer | null): AgentHookInstallStatus {
+  const home = getRealHomeCodexHookHome()
   const status = readHomeStatus(home, answer)
   if (status.state === 'installed' || status.state === 'error') {
     return status
@@ -208,7 +201,7 @@ function describeInlineApprovals(
     return typeof hash === 'string'
       ? [
           {
-            sourcePath: home.keySourcePaths[0]!,
+            sourcePath: home.keySourcePaths[0],
             eventLabel: label,
             command,
             timeoutSec: buildCodexManagedHook(command, eventName).timeout,

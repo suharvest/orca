@@ -11,16 +11,21 @@ import {
   CODEX_EVENT_LABEL,
   computeOrcaCodexHookHashes,
   getCodexConfigTomlPath,
-  getConfigPath
+  getConfigPath,
+  getSystemCodexConfigTomlPath
 } from './codex-hook-definition'
 import { readEveryKnownCodexHookHashes } from './codex-hook-hash-lookup'
+import {
+  getRealHomeHookKeySourcePaths,
+  getRealHomeHooksJsonPath
+} from './codex-real-home-hooks-json'
 import type { CodexHookHashes } from './codex-hook-trust-derivation'
 
 /** One Codex home's hook files, and every path Codex may key its entries by. */
 export type CodexHookHome = {
   hooksJsonPath: string
   tomlPath: string
-  keySourcePaths: readonly string[]
+  keySourcePaths: readonly [string, ...string[]]
 }
 
 export function getManagedCodexHookHome(runtimeHomePath: string): CodexHookHome {
@@ -29,6 +34,15 @@ export function getManagedCodexHookHome(runtimeHomePath: string): CodexHookHome 
     hooksJsonPath,
     tomlPath: getCodexConfigTomlPath(runtimeHomePath),
     keySourcePaths: [getCodexExplicitHomeHookSourcePath(hooksJsonPath)]
+  }
+}
+
+/** ~/.codex, under every spelling Codex may key its entries by. */
+export function getRealHomeCodexHookHome(): CodexHookHome {
+  return {
+    hooksJsonPath: getRealHomeHooksJsonPath(),
+    tomlPath: getSystemCodexConfigTomlPath(),
+    keySourcePaths: getRealHomeHookKeySourcePaths()
   }
 }
 
@@ -85,36 +99,40 @@ export function readStopgapOrcaHashes(home: CodexHookHome, command: string): Cod
   } catch {
     trustStates = new Map()
   }
-  const computed = computeOrcaCodexHookHashes(command)
-  return {
-    ...computed,
-    ...findApprovedOrcaHashes(
-      trustStates,
-      readHooksJson(home.hooksJsonPath)?.hooks,
-      home.keySourcePaths,
-      command,
-      [computed, ...readEveryKnownCodexHookHashes()]
-    )
-  }
+  return findStopgapOrcaHashes({
+    trustStates,
+    hooks: readHooksJson(home.hooksJsonPath)?.hooks,
+    keySourcePaths: home.keySourcePaths,
+    command,
+    knownOrcaHashes: [computeOrcaCodexHookHashes(command), ...readEveryKnownCodexHookHashes()]
+  })
 }
 
-/** Each event's approval at Orca's entry holding one of `orcaHashes`, over files already read. */
-export function findApprovedOrcaHashes(
-  trustStates: ReadonlyMap<string, CodexHookTrustState>,
-  hooks: HooksConfig['hooks'],
-  keySourcePaths: readonly string[],
-  command: string,
-  orcaHashes: readonly CodexHookHashes[]
-): Partial<Record<CodexEventLabel, string>> {
-  const slots = findOrcaEntrySlots(hooks, command)
-  return Object.fromEntries(
-    [...approvalsAtOrcaEntries(trustStates, slots, keySourcePaths, command)].flatMap(
-      ([eventLabel, approvals]) => {
-        const approval = approvals.find(({ trustedHash }) =>
-          orcaHashes.some((hashes) => hashes[eventLabel] === trustedHash)
+/** `readStopgapOrcaHashes` over files already read, counting only `knownOrcaHashes`. */
+export function findStopgapOrcaHashes(found: {
+  trustStates: ReadonlyMap<string, CodexHookTrustState>
+  hooks: HooksConfig['hooks']
+  keySourcePaths: readonly string[]
+  command: string
+  knownOrcaHashes: readonly CodexHookHashes[]
+}): CodexHookHashes {
+  const slots = findOrcaEntrySlots(found.hooks, found.command)
+  const approvals = approvalsAtOrcaEntries(
+    found.trustStates,
+    slots,
+    found.keySourcePaths,
+    found.command
+  )
+  return {
+    ...computeOrcaCodexHookHashes(found.command),
+    ...Object.fromEntries(
+      [...approvals].flatMap(([eventLabel, held]) => {
+        // Why a known hash also holds for a rewritten copy: Codex hashes content, not position.
+        const approval = held.find(({ trustedHash }) =>
+          found.knownOrcaHashes.some((hashes) => hashes[eventLabel] === trustedHash)
         )
         return approval ? [[eventLabel, approval.trustedHash]] : []
-      }
+      })
     )
-  )
+  }
 }

@@ -1,5 +1,4 @@
 import { withTimeout } from '../../shared/promise-timeout-fallback'
-import { getOrcaUserDataPath } from './codex-home-paths'
 import { computeOrcaCodexHookHashes } from './codex-hook-definition'
 import {
   CODEX_HOOK_LAUNCH_WAIT_MS,
@@ -151,13 +150,10 @@ async function reconcileOnce(request: {
     // Why nothing: this Codex cannot approve Orca's entry (no hooks/list); status says to update it.
     return
   }
-  const computedHashes = computeOrcaCodexHookHashes()
   await reconcileRealHomeCodexHookEntries({
     hashes: answer?.kind === 'hashes' ? answer.hashes : null,
-    knownOrcaHashes: [computedHashes, ...readEveryKnownCodexHookHashes()],
-    computedHashes,
+    knownOrcaHashes: [computeOrcaCodexHookHashes(), ...readEveryKnownCodexHookHashes()],
     isEnabled: () => config?.isEnabled() === true,
-    userDataPath: getOrcaUserDataPath(),
     convertOlderForms: request.convertOlderForms
   })
 }

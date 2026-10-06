@@ -35,7 +35,6 @@ import {
 import { getRealHomeHookKeySourcePaths } from './codex-real-home-hooks-json'
 import { cleanupLegacyManagedHookRepresentations } from './codex-hook-legacy-cleanup'
 import { getCodexManagedHookInstallMaterial } from './hook-service'
-import { computeOrcaCodexHookHashes } from './codex-hook-definition'
 
 // Why this file: Codex keys ~/.codex/hooks.json as spelled on its default home
 // and resolved when CODEX_HOME names it, so a symlinked home has two keys.
@@ -65,9 +64,7 @@ async function reconcile(): Promise<string> {
   return reconcileRealHomeCodexHookEntries({
     hashes: CODEX_HASHES,
     knownOrcaHashes: [],
-    computedHashes: computeOrcaCodexHookHashes(),
     isEnabled: () => true,
-    userDataPath: userDataDir,
     convertOlderForms: true
   })
 }

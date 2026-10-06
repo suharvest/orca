@@ -10,7 +10,6 @@ import {
   assertHooksJsonGeneration,
   backupRealHomeHooksJsonOnce,
   getRealHomeHookKeySourcePaths,
-  getRealHomeHooksJsonPath,
   HooksJsonChangedError,
   isAddableHooksFile
 } from './codex-real-home-hooks-json'
@@ -21,8 +20,8 @@ import {
   getCodexManagedHookInstallMaterial,
   getSystemCodexConfigTomlPath
 } from './codex-hook-definition'
-import { findApprovedOrcaHashes } from './codex-hook-orca-approvals'
-import { getSystemCodexHomePath } from './codex-home-paths'
+import { findStopgapOrcaHashes, getRealHomeCodexHookHome } from './codex-hook-orca-approvals'
+import { getOrcaUserDataPath, getSystemCodexHomePath } from './codex-home-paths'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-moves'
 import { sweepRealHomeCodexHook } from './codex-real-home-hook-sweep'
 import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation-queue'
@@ -59,10 +58,7 @@ type ReconcileArgs = {
   hashes: CodexHookHashes | null
   /** Hashes Orca may have approved its entry with before: an approval left behind with one is Orca's. */
   knownOrcaHashes: readonly CodexHookHashes[]
-  /** Orca's own hash of its entry, the stopgap until Codex answers. */
-  computedHashes: CodexHookHashes
   isEnabled: () => boolean
-  userDataPath: string
   /** App start and the setting turning on; a launch never fights a running older build. */
   convertOlderForms: boolean
 }
@@ -108,8 +104,7 @@ export async function reconcileRealHomeCodexHookEntries(
 }
 
 function reconcilePass(args: ReconcileArgs): RealHomeCodexHookOutcome | 'pruned' {
-  const hooksJsonPath = getRealHomeHooksJsonPath()
-  const tomlPath = getSystemCodexConfigTomlPath()
+  const { hooksJsonPath, tomlPath, keySourcePaths: sourcePaths } = getRealHomeCodexHookHome()
   const hooksWritePath = resolveHooksJsonWritePath(hooksJsonPath)
   // Why: the pre-write guard compares against these bytes; a separate later
   // read would let a concurrent save land between parse and write.
@@ -119,7 +114,6 @@ function reconcilePass(args: ReconcileArgs): RealHomeCodexHookOutcome | 'pruned'
   }
   const hooks = config.hooks ?? {}
   const material = getCodexManagedHookInstallMaterial()
-  const sourcePaths = getRealHomeHookKeySourcePaths()
   // Why only listed events: an entry Codex has no hash for would wait for review.
   const listed = args.hashes
   const events = listed
@@ -133,7 +127,7 @@ function reconcilePass(args: ReconcileArgs): RealHomeCodexHookOutcome | 'pruned'
     convertOlderForms: args.convertOlderForms
   })
   const writeHooks = (nextHooks: Record<string, HookDefinition[]>): void => {
-    backupRealHomeHooksJsonOnce(args.userDataPath, previousRaw)
+    backupRealHomeHooksJsonOnce(getOrcaUserDataPath(), previousRaw)
     assertHooksJsonGeneration(hooksJsonPath, hooksWritePath, previousRaw)
     // Why: unknown fields inside the file belong to the user; preserve them verbatim.
     writeHooksJson(hooksWritePath, { ...config, hooks: nextHooks }, { preserveMode: true })
@@ -152,17 +146,16 @@ function reconcilePass(args: ReconcileArgs): RealHomeCodexHookOutcome | 'pruned'
   }
 
   const trustStates = readHookTrustEntries(tomlPath)
-  const hashes = args.hashes ?? {
-    ...args.computedHashes,
-    ...keptApprovedHashes(
-      plan,
-      hooks,
+  // Why the stopgap: an entry already in place keeps its approval, so nothing changes.
+  const hashes =
+    args.hashes ??
+    findStopgapOrcaHashes({
       trustStates,
-      sourcePaths,
-      material.command,
-      args.knownOrcaHashes
-    )
-  }
+      hooks,
+      keySourcePaths: sourcePaths,
+      command: material.command,
+      knownOrcaHashes: args.knownOrcaHashes
+    })
   const approvals = sourcePaths.flatMap((keySource) =>
     plan.managedEntries.flatMap((entry) => {
       const trustedHash = hashes[entry.eventLabel]
@@ -172,18 +165,21 @@ function reconcilePass(args: ReconcileArgs): RealHomeCodexHookOutcome | 'pruned'
         : []
     })
   )
-  const missing = findMissingCodexHookApprovals(approvals, trustStates)
   const findStale = (states: ReadonlyMap<string, CodexHookTrustState>): string[] =>
     findStaleOrcaApprovals(states, approvals, sourcePaths, [hashes, ...args.knownOrcaHashes], plan)
   const changed = plan.changedLabels.size > 0
-  if (!changed && missing.length === 0 && findStale(trustStates).length === 0) {
+  if (
+    !changed &&
+    findMissingCodexHookApprovals(approvals, trustStates).length === 0 &&
+    findStale(trustStates).length === 0
+  ) {
     return 'unchanged'
   }
 
   writeManagedScript(material.scriptPath, material.script)
   writeCodexHookApprovalsBeforeEntries(
     tomlPath,
-    missing,
+    approvals,
     () => {
       if (changed) {
         writeHooks(plan.hooks)
@@ -199,25 +195,6 @@ function reconcilePass(args: ReconcileArgs): RealHomeCodexHookOutcome | 'pruned'
     console.warn('[codex-real-home-hooks] could not drop stale Orca approvals:', error)
   }
   return 'written'
-}
-
-/**
- * Codex has not answered: an entry already in place keeps the approval it has,
- * so nothing changes; any other entry gets Orca's own hash until Codex answers.
- */
-function keptApprovedHashes(
-  plan: SettlePlan,
-  hooks: Record<string, HookDefinition[]>,
-  trustStates: ReadonlyMap<string, CodexHookTrustState>,
-  sourcePaths: readonly string[],
-  command: string,
-  knownOrcaHashes: readonly CodexHookHashes[]
-): CodexHookHashes {
-  const approved = findApprovedOrcaHashes(trustStates, hooks, sourcePaths, command, knownOrcaHashes)
-  for (const label of plan.changedLabels) {
-    delete approved[label]
-  }
-  return approved
 }
 
 /**

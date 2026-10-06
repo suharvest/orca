@@ -296,9 +296,7 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
       return reconcileRealHomeCodexHookEntries({
         hashes,
         knownOrcaHashes: [],
-        computedHashes: hashes,
         isEnabled: () => true,
-        userDataPath: join(home, 'user-data'),
         convertOlderForms: false
       })
     }

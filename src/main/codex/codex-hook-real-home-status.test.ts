@@ -35,7 +35,7 @@ import {
   startCodexHookHashLookup
 } from './codex-hook-hash-lookup'
 import { reconcileRealHomeCodexHookEntries } from './codex-real-home-hook-install'
-import { CODEX_EVENT_LABEL, computeOrcaCodexHookHashes } from './codex-hook-definition'
+import { CODEX_EVENT_LABEL } from './codex-hook-definition'
 import type { CodexHookAnswer, CodexHookHashes } from './codex-hook-trust-derivation'
 
 // Why this file: status reports on the home the next native pane gets, and
@@ -70,9 +70,7 @@ async function writeOrcaEntry(hashes: CodexHookHashes | null): Promise<void> {
   await reconcileRealHomeCodexHookEntries({
     hashes,
     knownOrcaHashes: [],
-    computedHashes: computeOrcaCodexHookHashes(),
     isEnabled: () => true,
-    userDataPath: userData,
     convertOlderForms: true
   })
 }
