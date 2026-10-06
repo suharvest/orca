@@ -77,9 +77,8 @@ export type AgentLaunchSurfaceFactory = {
     prompt: AgentLaunchPrompt
   }): Promise<boolean>
   /**
-   * What became of a prompt the agent's launch command carried: proven received, handed over where
-   * the host can prove no more, not delivered (it exited first), or unconfirmed. Absent reads as
-   * handed over.
+   * What became of a prompt the agent's launch command carried: handed over once its agent runs or
+   * the host can tell no more, or not delivered (it exited first). Absent reads as handed over.
    */
   confirmCarriedTerminalPrompt?(args: {
     handle: string

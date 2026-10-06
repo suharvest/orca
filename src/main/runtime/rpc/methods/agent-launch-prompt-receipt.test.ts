@@ -1,9 +1,9 @@
 /**
  * What a launch's receipt says about its prompt, by host and caller, with no caller-supplied
  * delivery class: one rule from host facts. A caller that reads `unconfirmed` (the desktop, the CLI)
- * gets proof where the host can give it, so its follow-up never runs before the agent is ready; a
- * Windows host, which can never see the agent in front, reports the prompt as handed over, as main
- * ran the desktop's follow-up after its paste; the phone keeps the answer it always had.
+ * hears the prompt handed over once its agent runs, and not delivered if the agent exited at
+ * startup; a Windows host, which can never see the agent in front, reports it handed over at once,
+ * as main ran the desktop's follow-up after its paste; the phone keeps the answer it always had.
  */
 
 import { describe, expect, it, vi } from 'vitest'
@@ -75,6 +75,7 @@ function withPane(
         generation: 1
       })),
       readTerminalForegroundVerdict: vi.fn(async () => pane.foreground ?? 'launched-agent'),
+      terminalCommandFinishedSince: vi.fn(() => false),
       readLaunchedAgentForeground: vi.fn(async () => pane.shellAlone ?? 'unknown'),
       launchedAgentHostProvesAgent: vi.fn(() => false),
       subscribeToTerminalData: vi.fn(() => () => {})
@@ -92,23 +93,20 @@ async function launch(runtime: AgentLaunchRuntimeStub, context = DESKTOP) {
 }
 
 describe('a prompt the launch command carried', () => {
-  it('is handed over on a POSIX host only once the launched agent is ready', async () => {
-    const { runtime } = withPane(runtimeStub({ settings: {} }), { readyAt: 250 })
+  // Why: the desktop runs its follow-up on this answer; a ready signal can be a whole answer away.
+  it('is handed over on a POSIX host as soon as the launched agent runs, ready or not', async () => {
+    const { runtime } = withPane(runtimeStub({ settings: {} }), { readyAt: 60_000 })
     const started = Date.now()
 
     const result = await launch(runtime)
 
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
-    // The desktop runs its follow-up on this answer, so it never comes before the agent is ready.
-    expect(Date.now() - started).toBeGreaterThanOrEqual(240)
+    expect(Date.now() - started).toBeLessThan(1_000)
   })
 
   it('is not delivered on a POSIX host whose agent exited at startup', async () => {
-    let reads = 0
-    const { runtime } = withPane(runtimeStub({ settings: {} }), { readyAt: 60_000 })
-    Object.assign(runtime, {
-      readTerminalForegroundVerdict: vi.fn(async () => (reads++ < 1 ? 'launched-agent' : 'shell'))
-    })
+    const { runtime } = withPane(runtimeStub({ settings: {} }), { foreground: 'shell' })
+    Object.assign(runtime, { terminalCommandFinishedSince: vi.fn(() => true) })
 
     const result = await launch(runtime)
 

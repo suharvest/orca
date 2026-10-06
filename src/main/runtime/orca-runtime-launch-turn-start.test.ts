@@ -5,6 +5,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import type * as TerminalForegroundGroup from './terminal-foreground-group'
+import { proveCarriedTerminalAgentLaunchPrompt } from './rpc/methods/agent-launch-carried-prompt-proof'
 
 const { WORKTREE } = vi.hoisted(() => ({
   WORKTREE: {
@@ -201,6 +202,38 @@ describe('observeTerminalLaunchTurnStart', () => {
       runtime.emitDaemonPtyTransientFact('pty-launch', { kind: 'command-finished', exitCode: 0 })
 
       await expect(observed).resolves.toBe('unobserved')
+    }
+  )
+})
+
+describe('a carried prompt whose agent exits at startup', () => {
+  // Why: an agent that lives a few milliseconds is never seen in front; the shell's report is all.
+  it.skipIf(process.platform === 'win32')(
+    'is an exit from the shell reporting its line finished, from either path, before any read',
+    async () => {
+      for (const finish of [
+        (runtime: OrcaRuntimeService) =>
+          runtime.emitDaemonPtyTransientFact('pty-launch', {
+            kind: 'command-finished',
+            exitCode: 1
+          }),
+        (runtime: OrcaRuntimeService) =>
+          runtime.onPtyData('pty-launch', '\x1b]133;D;1\x07', Date.now())
+      ]) {
+        const launchStartedAt = Date.now()
+        const { runtime, handle } = await launchedCodex(() => [], { foreground: () => 'zsh' })
+        finish(runtime)
+
+        await expect(
+          proveCarriedTerminalAgentLaunchPrompt({
+            runtime,
+            handle,
+            agent: 'codex',
+            launchStartedAt,
+            timeoutMs: 2_000
+          })
+        ).resolves.toEqual({ outcome: 'not-delivered', reason: 'agent-exited' })
+      }
     }
   )
 })

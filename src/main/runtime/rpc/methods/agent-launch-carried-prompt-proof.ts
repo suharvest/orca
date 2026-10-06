@@ -1,37 +1,32 @@
 /**
  * What became of a prompt an agent's launch command carried, on a host that can see the agent.
  *
- * A caller acts on this answer (an AI button resolves threads, posts replies, marks notes sent), so
- * it must never be a guess, nor come before main's paste did. Proof is the launched agent itself
- * (named on its command line, never any other process: a slow shell startup runs its own) in front
- * once it signals it is ready, which counts only with no startup dialog up; or the agent's own hook
- * turn, whichever comes first. The launched agent seen and then the shell back is an exit before it
- * read the prompt. Anything else within the budget is unconfirmed: the agent may still run it.
+ * The prompt is on the agent's command line, so the agent has it the moment it runs: the launched
+ * agent itself in front (named on its command line, never any other process: a slow shell startup
+ * runs its own), or the agent's own hook turn, is the answer. The pane's shell reporting the launch
+ * line finished before either is an exit at startup, before the agent read it. With neither within
+ * the budget, the prompt stays handed to the terminal, as on a host that cannot see: a slow read
+ * never costs the caller its follow-up.
  */
 
 import type { AgentLaunchPromptDisposal } from '../../../../shared/agent-launch-intent'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import {
-  waitForLaunchedAgentComposer,
-  type LaunchedAgentReadinessRuntime
-} from '../../launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
-type CarriedPromptProofRuntime = LaunchedAgentReadinessRuntime &
-  Pick<
-    OrcaRuntimeService,
-    | 'observeTerminalLaunchTurnStart'
-    | 'getTerminalPromptRequestBinding'
-    | 'readTerminalForegroundVerdict'
-  >
+type CarriedPromptProofRuntime = Pick<
+  OrcaRuntimeService,
+  | 'observeTerminalLaunchTurnStart'
+  | 'getTerminalPromptRequestBinding'
+  | 'readTerminalForegroundVerdict'
+  | 'terminalCommandFinishedSince'
+>
 
 const RECEIVED: AgentLaunchPromptDisposal = { outcome: 'handed-to-terminal' }
 const EXITED: AgentLaunchPromptDisposal = { outcome: 'not-delivered', reason: 'agent-exited' }
-const UNCONFIRMED: AgentLaunchPromptDisposal = { outcome: 'unconfirmed' }
 
-/** The budget the host's paste gives the agent to reach its composer. */
-const PROOF_BUDGET_MS = 60_000
-/** Each read is one process scan of the pane, so they start often and back off. */
+/** Long enough for a slow shell to start and run the line; a follow-up waits on it at most this. */
+const PROOF_BUDGET_MS = 10_000
+/** Each foreground read is one process scan of the pane, so they start often and back off. */
 const FIRST_READ_MS = 100
 const MAX_READ_MS = 1_000
 
@@ -39,7 +34,7 @@ export async function proveCarriedTerminalAgentLaunchPrompt(args: {
   runtime: CarriedPromptProofRuntime
   handle: string
   agent: TuiAgent
-  /** Taken before the spawn: only a hook turn after it proves this prompt. */
+  /** Taken before the spawn: only a hook turn or a finished command after it is this launch's. */
   launchStartedAt: number
   timeoutMs?: number
 }): Promise<AgentLaunchPromptDisposal> {
@@ -59,48 +54,39 @@ export async function proveCarriedTerminalAgentLaunchPrompt(args: {
           ? EXITED
           : null
     })().catch(() => null)
-    const launchedAgent = watchLaunchedAgent(args, timeoutMs, stop.signal).catch(() => null)
-    // Bookkeeping never fails a launch whose agent runs: a read that cannot answer is unconfirmed.
-    return (await firstAnswer([hookTurn, launchedAgent])) ?? UNCONFIRMED
+    const launchedAgent = watchLaunch(args, timeoutMs, stop.signal).catch(() => null)
+    // Bookkeeping never gates the caller: a read that cannot answer leaves the prompt handed over.
+    return (await firstAnswer([hookTurn, launchedAgent])) ?? RECEIVED
   } finally {
     stop.abort()
   }
 }
 
-async function watchLaunchedAgent(
-  args: { runtime: CarriedPromptProofRuntime; handle: string; agent: TuiAgent },
+async function watchLaunch(
+  args: {
+    runtime: CarriedPromptProofRuntime
+    handle: string
+    agent: TuiAgent
+    launchStartedAt: number
+  },
   timeoutMs: number,
   signal: AbortSignal
 ): Promise<AgentLaunchPromptDisposal | null> {
   const deadline = Date.now() + timeoutMs
-  let ready = false
-  // The same signal the host's paste waits for, which holds while a startup dialog is up.
-  void (async () => {
-    ready = (await waitForLaunchedAgentComposer(args.runtime, args.handle, args.agent, timeoutMs))
-      .satisfied
-  })().catch(() => {})
-  let ptyId: string
-  try {
-    ptyId = args.runtime.getTerminalPromptRequestBinding(args.handle).ptyId
-  } catch {
-    return null
-  }
-  let launchedAgentSeen = false
+  const { ptyId } = args.runtime.getTerminalPromptRequestBinding(args.handle)
   let interval = FIRST_READ_MS
   while (!signal.aborted && Date.now() < deadline) {
     const verdict = await args.runtime
       .readTerminalForegroundVerdict(ptyId, args.agent)
       .catch(() => 'unknown' as const)
     if (verdict === 'launched-agent') {
-      launchedAgentSeen = true
-      if (ready) {
-        return RECEIVED
-      }
-    } else if (verdict === 'shell' && launchedAgentSeen) {
+      return RECEIVED
+    }
+    // The shell's own report, so an agent that lived too briefly to be seen still counts as exited.
+    if (args.runtime.terminalCommandFinishedSince(args.handle, args.launchStartedAt)) {
       return EXITED
     }
-    // Once ready, the next read is the one that proves it, so it is taken at once.
-    await abortableDelay(ready ? FIRST_READ_MS : interval, signal)
+    await abortableDelay(interval, signal)
     interval = Math.min(interval * 2, MAX_READ_MS)
   }
   return null

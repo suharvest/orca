@@ -200,8 +200,8 @@ export function agentLaunchSurfaceFactory(
           : 'refuse'
       }),
     confirmCarriedTerminalPrompt: async ({ handle, agent, launchStartedAt }) =>
-      // A caller that reads `unconfirmed` waits for proof where the host can give it; one that cannot
-      // read it, or a host that cannot see the agent (Windows), gets the prompt as handed over.
+      // Where the host can see the agent, a caller that reads `unconfirmed` hears of an exit at
+      // startup; elsewhere (Windows, the phone) the prompt is handed over at once.
       readsUnconfirmedLaunchPrompt(context) && launchHostByHandle.get(handle)?.provesAgentInFront
         ? proveCarriedTerminalAgentLaunchPrompt({
             runtime: context.runtime,

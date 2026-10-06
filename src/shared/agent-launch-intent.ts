@@ -172,11 +172,14 @@ export type AgentLaunchPromptDisposal =
    *   pasted, the agent proven in front (macOS, Linux, SSH to them)       -> handed-to-terminal
    *   pasted on a Windows cmd or PowerShell pane, no shell in front       -> handed-to-terminal
    *   on the line, a caller that reads `unconfirmed`, a host that can see
-   *     the agent: once it is in front and ready, or its hook turn        -> handed-to-terminal
+   *     the agent: once the agent runs (in front, or its hook turn), or
+   *     when the host sees neither within its budget                     -> handed-to-terminal
    *   on the line, a Windows host (it can never see the agent in front)   -> handed-to-terminal
    *   on the line, a caller that cannot read `unconfirmed`                 -> handed-to-terminal
-   *   the agent exited before it read the line, or a paste found no agent -> not-delivered
-   *   no proof within the budget, or the host stopped mid-delivery       -> unconfirmed
+   *   the shell finished the line before the agent ran, or a paste found
+   *     no agent                                                          -> not-delivered
+   *   a paste with no proof within its budget, or the host stopped
+   *     mid-delivery                                                      -> unconfirmed
    */
   | { outcome: 'handed-to-terminal' }
   /** Not delivered by this call; the caller still owns the text. `reason`, when present, says why;
@@ -185,8 +188,8 @@ export type AgentLaunchPromptDisposal =
   | { outcome: 'not-delivered'; reason?: string }
   /**
    * The text may or may not have arrived, so the caller must not resend. Replayed when the host
-   * recorded the running agent and stopped before the delivery reported back; live when a host that
-   * can see the agent found no proof a carried prompt arrived. Sent only to a caller advertising
+   * recorded the running agent and stopped before the delivery reported back; live when a paste
+   * found no proof it arrived. Sent only to a caller advertising
    * `agent.launch.prompt-unconfirmed.v1`; a replay to any other caller is refused with
    * `agent_session_operation_unknown` instead.
    */
