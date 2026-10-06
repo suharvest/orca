@@ -112,8 +112,9 @@ or per-keystroke/process-list scan. Existing authenticated daemon adoption bypas
 
 ## Permission status and existing sessions
 
-The Full Disk Access row reports the app and terminal hosts separately. The existing read probe
-also runs inside each connected daemon generation. A denied generation wins; granted requires
+The Full Disk Access row reports the app and terminal hosts separately. The read probe discards one byte from the protected TCC database and
+also runs inside each connected daemon generation. An allowed open with denied contents does
+not report granted, and the file handle closes on both success and denial. A denied generation wins; granted requires
 every generation to report granted. Degraded mode also probes its in-process fallback host. An older daemon that lacks the new read-only request, a
 malformed response, a timeout or lost contact remains unknown. The request adds no stream opcode
 or protocol bump, and settings reads neither launch nor replace a daemon.
