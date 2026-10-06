@@ -403,6 +403,33 @@ describe('reconcileCodexHooks', () => {
   })
 })
 
+describe("warming Codex's answer at app start", () => {
+  it('asks once the shell PATH is hydrated, while panes use a managed home too', async () => {
+    usesRealHome = false
+    let hydrate: () => void = () => {}
+    const started = start(
+      new Promise<void>((resolve) => {
+        hydrate = resolve
+      })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
+
+    hydrate()
+    await started
+
+    await vi.waitFor(() => expect(mocks.probeCodexVersion).toHaveBeenCalledTimes(1))
+  })
+
+  it('does not ask while hooks are off', async () => {
+    enabled = false
+    await start()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
+  })
+})
+
 describe('while the lookup is still asking Codex', () => {
   function holdDerivation(): () => void {
     let release!: () => void

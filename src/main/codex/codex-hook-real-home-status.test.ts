@@ -60,7 +60,7 @@ async function answer(next: CodexHookAnswer): Promise<void> {
     mocks.probeCodexVersion.mockResolvedValue(next.codexVersion)
     mocks.deriveCodexHookHashes.mockResolvedValue(next)
   }
-  startCodexHookHashLookup({ pathReady: Promise.resolve(), isEnabled: () => false })
+  startCodexHookHashLookup(Promise.resolve())
   await resolveCodexHookAnswer()
 }
 

@@ -69,7 +69,7 @@ import { CODEX_DAEMON_OVERRIDE_MARKER } from './codex-daemon-socket-path-guard'
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 // Why started: lets the lookup ask the stand-in Codex, as the app does.
 beforeEach(() => {
-  startCodexHookHashLookup({ pathReady: Promise.resolve(), isEnabled: () => false })
+  startCodexHookHashLookup(Promise.resolve())
 })
 
 const CODEX_HASHES = {

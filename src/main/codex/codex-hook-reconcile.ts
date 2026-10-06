@@ -34,7 +34,6 @@ let rerun = false
 // Why flags, not counters: a request the next run cannot serve (hooks off, ~/.codex not used) is dropped.
 let convertRequested = false
 let realHomeLaunchRequested = false
-let rerunOnAnswer = false
 
 // Why short: a pending lookup must leave room in a launch's 3 s wait for the stopgap write.
 const ANSWER_WAIT_MS = 500
@@ -43,14 +42,15 @@ const ANSWER_WAIT_MS = 500
  * App start, main process only: lets Orca ask Codex for its hook hashes, and
  * reconciles ~/.codex, both once the shell PATH is hydrated.
  */
-export function startCodexHooks(options: ReconcileConfig & { pathReady: Promise<unknown> }): void {
-  const pathReady = options.pathReady.catch(() => {})
-  startCodexHookHashLookup({ pathReady, isEnabled: options.isEnabled })
-  config = {
-    isEnabled: options.isEnabled,
-    usesRealHome: options.usesRealHome,
-    resolveLaunchHome: options.resolveLaunchHome
-  }
+export function startCodexHooks({
+  pathReady: hydrating,
+  ...appConfig
+}: ReconcileConfig & { pathReady: Promise<unknown> }): void {
+  const pathReady = hydrating.catch(() => {})
+  startCodexHookHashLookup(pathReady)
+  config = appConfig
+  // Why ask now when hooks are on: the first managed launch then usually finds the answer ready.
+  void pathReady.then(() => (appConfig.isEnabled() ? resolveCodexHookAnswer() : undefined))
   // Why held as the running reconcile: launches before PATH is hydrated wait on it, not run early.
   void reconcileAfter(pathReady, { convertOlderForms: true })
 }
@@ -128,23 +128,16 @@ async function runUntilSettled(): Promise<void> {
   }
 }
 
-async function reconcileOnce(request: {
-  convertOlderForms: boolean
-  realHomeLaunch: boolean
-}): Promise<void> {
+async function reconcileOnce(request: Required<ReconcileRequest>): Promise<void> {
   const current = config
   if (!current?.isEnabled() || !(request.realHomeLaunch || current.usesRealHome())) {
     return
   }
   const lookup = resolveCodexHookAnswer()
   const answer = await withTimeout<CodexHookAnswer | null>(lookup, ANSWER_WAIT_MS, null)
-  if (!answer && !rerunOnAnswer) {
+  if (!answer) {
     // Why: the stopgap below goes in now, as main's did; Codex's hash replaces it once it answers.
-    rerunOnAnswer = true
-    void lookup.then(() => {
-      rerunOnAnswer = false
-      void reconcileCodexHooks({ realHomeLaunch: request.realHomeLaunch })
-    })
+    void lookup.then(() => reconcileCodexHooks({ realHomeLaunch: request.realHomeLaunch }))
   }
   if (answer?.kind === 'refused') {
     // Why nothing: this Codex cannot approve Orca's entry (no hooks/list); status says to update it.
@@ -165,7 +158,6 @@ export const _internals = {
     rerun = false
     convertRequested = false
     realHomeLaunchRequested = false
-    rerunOnAnswer = false
   },
   /** Settles once no reconcile runs. */
   async settledForTesting(): Promise<void> {

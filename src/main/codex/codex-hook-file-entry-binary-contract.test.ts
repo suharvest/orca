@@ -126,7 +126,7 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
     mkdirSync(join(home, '.codex'), { recursive: true })
     // Why saved: the app's lookup then re-probes the version and finds the answer, with no second hooks/list.
     memoizeCodexHookAnswer(binary!, fingerprintCodex(binary!)!, command(), answer)
-    startCodexHookHashLookup({ pathReady: Promise.resolve(), isEnabled: () => false })
+    startCodexHookHashLookup(Promise.resolve())
     expect((await new CodexHookService().install(accountHome())).state).toBe('installed')
   }
 
