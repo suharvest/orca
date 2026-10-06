@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import type { HooksConfig } from '../agent-hooks/installer-utils'
 import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
+import { isPlainObject, readHooksJsonWithRaw } from '../agent-hooks/hooks-json-read'
 import { getSystemCodexHomePath } from './codex-home-paths'
 import {
   getCodexExplicitHomeHookSourcePath,
@@ -30,9 +32,40 @@ export function getRealHomeConfigTomlPath(): string {
   return join(getSystemCodexHomePath(), 'config.toml')
 }
 
-/** Orca-side state dir; nothing extra is ever written into the user's ~/.codex. */
+/** Orca-side home of the pristine copy; the rolling hooks.json.bak beside the file is writeHooksJson's. */
 function getRealHomeHookStateDir(userDataPath: string): string {
   return join(userDataPath, 'codex-real-home-hooks')
+}
+
+/** Another process saved hooks.json between Orca's read and its write. */
+export class HooksJsonChangedError extends Error {
+  constructor() {
+    super('Codex hooks.json changed since Orca read it')
+    this.name = 'HooksJsonChangedError'
+  }
+}
+
+/**
+ * Why ~/.codex/hooks.json cannot take Orca's entry, read from the file now; null
+ * when it can. Only its shape counts: an unreadable file (EACCES) would fail the
+ * managed home's install too, so moving launches there gains nothing.
+ */
+export function readRealHomeHooksFileShapeProblem(): string | null {
+  const hooksJsonPath = getRealHomeHooksJsonPath()
+  const { raw, config } = readHooksJsonWithRaw(hooksJsonPath)
+  if (raw === null) {
+    return null
+  }
+  return isAddableHooksFile(config) ? null : `${hooksJsonPath} is not a hooks file Orca can add to`
+}
+
+// Why: an unparseable user file is never clobbered, and Codex rejects unknown root keys.
+export function isAddableHooksFile(config: HooksConfig | null): config is HooksConfig {
+  return (
+    config !== null &&
+    Object.keys(config).every((key) => key === 'hooks') &&
+    (config.hooks === undefined || isPlainObject(config.hooks))
+  )
 }
 
 export function assertHooksJsonGeneration(
@@ -44,7 +77,7 @@ export function assertHooksJsonGeneration(
   if (currentRaw !== expectedRaw || resolveHooksJsonWritePath(hooksJsonPath) !== hooksWritePath) {
     // Why: another process may have saved since the read. Abort rather than
     // atomically replacing a newer file with the stale parsed snapshot.
-    throw new Error('Codex hooks.json changed since Orca read it')
+    throw new HooksJsonChangedError()
   }
 }
 

@@ -341,7 +341,7 @@ describe('managed-home Codex hook approval', () => {
   it('reports why there is no status when Orca has not asked Codex yet', () => {
     lookupInternals.resetForTesting()
 
-    expect(new CodexHookService().getStatus()).toMatchObject({
+    expect(new CodexHookService().getStatus(managedHome())).toMatchObject({
       state: 'not_installed',
       detail: 'Orca has not asked Codex yet'
     })
@@ -477,7 +477,7 @@ describe('managed-home Codex hook approval', () => {
       }
     ])
 
-    expect(service.getStatus()).toMatchObject({
+    expect(service.getStatus(managedHome())).toMatchObject({
       state: 'partial',
       detail: 'Approval missing, stale or disabled for events: SessionStart, Stop'
     })
@@ -489,7 +489,7 @@ describe('managed-home Codex hook approval', () => {
     expect((await service.install()).state).toBe('installed')
 
     await service.remove()
-    expect(service.getStatus()).toMatchObject({ state: 'not_installed', detail: null })
+    expect(service.getStatus(managedHome())).toMatchObject({ state: 'not_installed', detail: null })
     expect((await service.install()).state).toBe('installed')
 
     expect(codex.deriveCodexHookHashes).toHaveBeenCalledTimes(1)
@@ -538,7 +538,7 @@ describe('managed-home Codex hook approval', () => {
       await service.install()
       writeFileSync(join(managedHome(), 'config.toml'), '')
 
-      expect(service.getStatus()).toMatchObject({
+      expect(service.getStatus(managedHome())).toMatchObject({
         state: 'partial',
         detail: "Orca's hook entry is not approved yet (timed out)"
       })

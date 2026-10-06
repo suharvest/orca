@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
  * Source-level because the call sits inside the ready-phase composition, which
  * has no runtime seam; the lookup's own ordering is tested in codex-hook-hash-lookup.test.ts.
  */
-describe('Codex hook hash warm-up startup wiring', () => {
+describe('Codex hook startup wiring', () => {
   const source = readFileSync(
     join(process.cwd(), 'src/main/startup/main-process-ready-runtime.ts'),
     'utf8'
@@ -27,7 +27,20 @@ describe('Codex hook hash warm-up startup wiring', () => {
     // Why pin the indent: inside an added `if (...)` the call would stop running on most starts.
     expect(entryBody).toContain('\n  startCodexHookHashLookup({')
     expect(entryBody).toContain(
-      'pathReady: app.isPackaged ? hydrateAgentCliShellPath() : Promise.resolve()'
+      'const codexPathReady = app.isPackaged ? hydrateAgentCliShellPath() : Promise.resolve()'
+    )
+    expect(entryBody).toContain('startCodexHookHashLookup({ pathReady: codexPathReady,')
+  })
+
+  it("starts ~/.codex's reconcile unconditionally, after the same PATH hydration", () => {
+    expect(source).toContain(
+      "import { startCodexHookReconcile } from '../codex/codex-hook-reconcile'"
+    )
+    expect(entryBody.split('startCodexHookReconcile(').length - 1).toBe(1)
+    expect(entryBody).toContain('\n  startCodexHookReconcile({')
+    const reconcileStart = entryBody.slice(entryBody.indexOf('startCodexHookReconcile({'))
+    expect(reconcileStart.slice(0, reconcileStart.indexOf('\n  })'))).toContain(
+      'pathReady: codexPathReady'
     )
   })
 })

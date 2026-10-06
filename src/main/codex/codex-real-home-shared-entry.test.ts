@@ -25,9 +25,10 @@ vi.mock('os', async (importOriginal) => {
 
 import { CodexHookService, getCodexManagedHookInstallMaterial } from './hook-service'
 import {
-  _internals as realHomeInternals,
-  ensureRealHomeCodexHookState
-} from './codex-real-home-hook-install'
+  _internals as reconcileInternals,
+  reconcileCodexHooks,
+  startCodexHookReconcile
+} from './codex-hook-reconcile'
 import { getOrcaManagedCodexHomePath } from './codex-home-paths'
 import {
   resolveStartupManagedHookAction,
@@ -96,6 +97,21 @@ function snapshotRealCodexHome(): Map<string, { bytes: string; mtimeMs: number }
   )
 }
 
+async function reconcileWithHooksOff(): Promise<void> {
+  reconcileInternals.resetForTesting()
+  const stop = startCodexHookReconcile({
+    isEnabled: () => false,
+    usesRealHome: () => true,
+    resolveLaunchHome: () => null,
+    pathReady: Promise.resolve()
+  })
+  try {
+    await reconcileCodexHooks({ convertOlderForms: true, realHomeLaunch: true })
+  } finally {
+    stop()
+  }
+}
+
 describe('the shared real-home Codex entry', () => {
   it('survives a pane spawn under a managed account, with no .bak', async () => {
     seedSharedEntry()
@@ -114,18 +130,11 @@ describe('the shared real-home Codex entry', () => {
     expect(snapshotRealCodexHome()).toEqual(before)
   })
 
-  it('survives launch prep on the real-home lane with hooks off', async () => {
+  it('survives a reconcile on the real-home lane with hooks off', async () => {
     seedSharedEntry()
-    realHomeInternals.resetForTesting('installed')
     const before = snapshotRealCodexHome()
 
-    expect(
-      await ensureRealHomeCodexHookState({
-        hooksEnabled: false,
-        userDataPath: homes.userDataDir,
-        writePolicy: 'add-missing-only'
-      })
-    ).toBe('removed')
+    await reconcileWithHooksOff()
 
     expect(snapshotRealCodexHome()).toEqual(before)
   })
@@ -139,11 +148,7 @@ describe('the shared real-home Codex entry', () => {
     expect(resolveStartupManagedHookAction(settings)).toBe('skip')
     expect(shouldInstallStartupManagedAgentHook(settings, 'codex')).toBe(false)
     // First pane: both lanes run with hooks off.
-    await ensureRealHomeCodexHookState({
-      hooksEnabled: false,
-      userDataPath: homes.userDataDir,
-      writePolicy: 'add-missing-only'
-    })
+    await reconcileWithHooksOff()
     await new CodexHookService().prepareRuntimeHomeForLaunch(
       getOrcaManagedCodexHomePath(),
       undefined,

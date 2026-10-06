@@ -1,6 +1,7 @@
 import {
   createManagedCommandMatcher,
   readHooksJsonWithRaw,
+  type HookDefinition,
   writeHooksJson,
   writeManagedScript
 } from '../agent-hooks/installer-utils'
@@ -10,369 +11,274 @@ import {
   backupRealHomeHooksJsonOnce,
   getRealHomeConfigTomlPath,
   getRealHomeHookKeySourcePaths,
-  getRealHomeHooksJsonPath
+  getRealHomeHooksJsonPath,
+  HooksJsonChangedError,
+  isAddableHooksFile
 } from './codex-real-home-hooks-json'
-import { upsertHookTrustEntries, type CodexTrustEntry } from './config-toml-trust'
 import { getCodexManagedScriptFileName } from './codex-hook-identity'
-import {
-  CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS,
-  findCurrentManagedCodexHookTrust,
-  type CodexManagedTrustGrantOutcome,
-  type CodexManagedTrustGrantPlan
-} from './codex-hook-trust-grant'
-import { readCodexTrustGrantLedgerHomeForReconciliation } from './codex-managed-trust-reconciliation'
 import { removeSystemManagedHookTrustEntries } from './codex-hook-trust-cleanup'
-import { getCodexManagedHookInstallMaterial } from './codex-hook-definition'
+import { CODEX_EVENT_LABEL, getCodexManagedHookInstallMaterial } from './codex-hook-definition'
 import { getSystemCodexHomePath } from './codex-home-paths'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-moves'
 import { sweepRealHomeCodexHook } from './codex-real-home-hook-sweep'
-import {
-  runExclusivelyForCodexTrustConfig,
-  runOutsideCodexTrustConfigLanes
-} from './codex-trust-config-mutation-queue'
+import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation-queue'
 import {
   planRealHomeCodexHookEntries,
-  type RealHomeCodexHookSlotWrite,
-  type RealHomeCodexHookWritePolicy
+  type RealHomeCodexHookEntryPlan
 } from './codex-real-home-hook-entry-plan'
+import type { CodexHookHashes } from './codex-hook-trust-derivation'
 import {
-  _internals as approvalInternals,
-  describeRealHomeApprovalRetry,
-  hasUnapprovedRealHomeOrcaEntry,
-  recordRealHomeApprovalOutcome,
-  requestRealHomeCodexApproval,
-  type RealHomeBackgroundGrant
-} from './codex-real-home-background-grant'
-import { withdrawUntrustedRealHomeWrites } from './codex-real-home-hook-withdrawal'
-
-export type { RealHomeCodexHookWritePolicy }
+  findMissingCodexHookApprovals,
+  readsEntryAtApprovedSlot,
+  writeCodexHookApprovalsBeforeEntries
+} from './codex-hook-approval-first-write'
+import {
+  codexHookSourcePathsEqual,
+  computeTrustKey,
+  isCodexConfigTomlRefusedError,
+  normalizeHookTrustKeyForLookup,
+  parseTrustKey,
+  readHookTrustEntries,
+  removeHookTrustEntries,
+  type CodexEventLabel,
+  type CodexHookTrustState,
+  type CodexTrustEntry
+} from './config-toml-trust'
 
 /**
- * What the real-home check last concluded, for the routing gate (flag ON,
- * system default). Output only: no decision in this module reads it.
- *
- * - 'pending': no attempt yet this process; routing may optimistically use the
- *   real home (reads are hook-free and the install runs before pane spawns).
- * - 'approving': the entry is written, and Codex's approval runs in the
- *   background. Launches use the managed home until it lands; a resume waits.
- * - 'installed': every managed event in ~/.codex/hooks.json has an Orca entry,
- *   and the frozen ones are trusted by codex itself through the app-server grant.
- * - 'unavailable': the grant lane could not trust the entry (old binary,
- *   unsupported RPC, verify failure), or its retry window is still open. An
- *   entry the attempt wrote that is still untrusted is withdrawn.
- * - 'removed': hooks are off here. Launch prep leaves the real home as it is;
- *   only an explicit opt-out strips Orca's entry, since other Orcas share it.
+ * - 'unchanged': Orca's entries and their approvals were already as wanted; nothing written.
+ * - 'written': this call wrote approvals, entries, or both.
+ * - 'unavailable': ~/.codex could not take Orca's approved entry (`reason` says why).
+ * - 'disabled': hooks were off when the lane came free; nothing written.
  */
-export type RealHomeCodexHookVerdict =
-  | 'pending'
-  | 'approving'
-  | 'installed'
-  | 'unavailable'
-  | 'removed'
+export type RealHomeCodexHookOutcome = 'unchanged' | 'written' | 'unavailable' | 'disabled'
 
-type RealHomeCodexHookIntent = {
-  hooksEnabled: boolean
+export type RealHomeCodexHookReconcile = { outcome: RealHomeCodexHookOutcome; reason?: string }
+
+type ReconcileArgs = {
+  /** Codex's hashes; null while Codex has not answered, when Orca keeps or computes its own. */
+  hashes: CodexHookHashes | null
+  /** Hashes Orca may have approved its entry with before: an approval left behind with one is Orca's. */
+  knownOrcaHashes: readonly CodexHookHashes[]
+  /** Orca's own hash of its entry, the stopgap until Codex answers. */
+  computedHashes: CodexHookHashes
+  isEnabled: () => boolean
   userDataPath: string
-  writePolicy: RealHomeCodexHookWritePolicy
+  /** App start and the setting turning on; a launch never fights a running older build. */
+  convertOlderForms: boolean
 }
 
-type Approval = {
-  /** What this attempt wrote; only its own settle withdraws it. */
-  writes: readonly RealHomeCodexHookSlotWrite[]
-  command: string
-  /** Settles once Codex approved, or this attempt's unapproved adds are withdrawn. */
-  done: Promise<void>
-}
-
-let verdict: RealHomeCodexHookVerdict = 'pending'
-// Why: at most one Codex approval session per process.
-let approval: Approval | null = null
-let installRetryAfterMs = 0
-let readCodexHooksEnabled: () => boolean = () => true
-
-export function getRealHomeCodexHookVerdict(): RealHomeCodexHookVerdict {
-  return verdict
-}
-
-/** The settings' answer, read when an approval settles after its caller has gone. */
-export function setRealHomeCodexHooksEnabledReader(read: () => boolean): void {
-  readCodexHooksEnabled = read
-}
+// Why a bound: each pass either prunes Orca's extra copies or settles; a concurrent save adds one more.
+const MAX_PASSES = 4
 
 /**
- * Routing gate consumed by CodexRuntimeHomeService. Never usable while an
- * approval runs, whatever the verdict says. Both a failed install and a failed
- * opt-out cleanup use the managed lane so no half-mutated hook state can
- * diverge from PTY, rate-limit, or commit-message routing.
+ * Makes ~/.codex hold Orca's entry alone, last unless already in place, in each
+ * event Codex lists, with Codex's hash for it approved and enabled. Writes only
+ * what differs; an approval goes in before its entry and is taken back if the
+ * entry write fails. Never throws.
  */
-export function isRealHomeCodexHookLaneUsable(): boolean {
-  return approval === null && verdict !== 'unavailable' && verdict !== 'approving'
-}
-
-/**
- * Installs and trusts the Orca status hook in the real home when hooks are on,
- * and writes nothing when they are off. Add-only: it never removes an Orca
- * entry, and only `convert-older-forms` rewrites one. Idempotent; a home that
- * already holds the frozen entry costs one read, and a valid grant ledger skips
- * the RPC session. Never waits on a session: Codex's approval runs in the
- * background. Never throws: any failure logs and leaves the managed lane.
- */
-export async function ensureRealHomeCodexHookState(
-  intent: RealHomeCodexHookIntent
-): Promise<RealHomeCodexHookVerdict> {
+export async function reconcileRealHomeCodexHookEntries(
+  args: ReconcileArgs
+): Promise<RealHomeCodexHookReconcile> {
   try {
-    // Why one lane-held step: finding no approval running and starting one are
-    // atomic, and the lane also orders this write against the retired-form sweep.
-    return await runExclusivelyForCodexTrustConfig(getRealHomeConfigTomlPath(), () =>
-      reconcileRealHomeCodexHook(intent)
-    )
-  } catch (error) {
-    return failRealHomeCodexHookCheck(error)
-  }
-}
-
-/**
- * For a resume that must run in the real home, with no managed home to fall
- * back to: while an approval runs and Codex would put an Orca entry up for
- * review, waits for that one approval, which its session's 30 s limit bounds.
- */
-export async function awaitRealHomeCodexHookTrust(): Promise<void> {
-  const current = approval
-  if (current && hasUnapprovedRealHomeOrcaEntry(current.command)) {
-    await current.done
-  }
-}
-
-async function reconcileRealHomeCodexHook(
-  intent: RealHomeCodexHookIntent
-): Promise<RealHomeCodexHookVerdict> {
-  if (approval) {
-    // Why: a launch never waits on Codex's approval, and the running one covers
-    // add-missing. App start's conversion is the process's first check, so none waits here.
-    return (verdict = 'approving')
-  }
-  if (!intent.hooksEnabled) {
-    // Why: this runs for launch prep and startup, and the entry is shared by
-    // every Orca on this HOME; removing it is the explicit opt-out's job.
-    installRetryAfterMs = 0
-    return (verdict = 'removed')
-  }
-  if (Date.now() < installRetryAfterMs) {
-    // Why: writing and withdrawing the entry again before then only adds work to every launch.
-    return (verdict = 'unavailable')
-  }
-  const install = await installRealHomeCodexHook(intent.userDataPath, intent.writePolicy)
-  if (!install.grant) {
-    if (install.verdict === 'installed') {
-      installRetryAfterMs = 0
-    }
-    return (verdict = install.verdict)
-  }
-  approval = startApproval(install.grant)
-  return (verdict = 'approving')
-}
-
-function failRealHomeCodexHookCheck(error: unknown): RealHomeCodexHookVerdict {
-  console.warn('[codex-real-home-hooks] ensure failed; staying on managed lane:', error)
-  installRetryAfterMs = Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
-  return (verdict = 'unavailable')
-}
-
-function startApproval(grant: RealHomeBackgroundGrant): Approval {
-  const adds = { writes: grant.writes, command: grant.command }
-  // Why outside the lane: the session holds none, and its settle queues for it like any writer.
-  const done = runOutsideCodexTrustConfigLanes(async () => {
-    const outcome = await requestRealHomeCodexApproval(grant.plan)
-    try {
-      await runExclusivelyForCodexTrustConfig(getRealHomeConfigTomlPath(), () =>
-        settleApproval(adds, outcome)
-      )
-    } catch (error) {
-      // Why: a settle that cannot run must still end its own flight, or every check answers 'approving'.
-      if (approval?.done === done) {
-        approval = null
+    return await runExclusivelyForCodexTrustConfig(getRealHomeConfigTomlPath(), async () => {
+      let retriedConcurrentEdit = false
+      for (let pass = 0; pass < MAX_PASSES; pass += 1) {
+        if (!args.isEnabled()) {
+          return { outcome: 'disabled' }
+        }
+        try {
+          const result = reconcilePass(args)
+          if (result !== 'pruned') {
+            return result
+          }
+        } catch (error) {
+          // Why once: a user's save landed between Orca's read and write; the next read sees it.
+          if (!(error instanceof HooksJsonChangedError) || retriedConcurrentEdit) {
+            throw error
+          }
+          retriedConcurrentEdit = true
+        }
       }
-      failRealHomeCodexHookCheck(error)
-    }
-  })
-  return { ...adds, done }
-}
-
-async function settleApproval(
-  adds: Omit<Approval, 'done'>,
-  outcome: CodexManagedTrustGrantOutcome | null
-): Promise<void> {
-  const approved = outcome?.lane === 'rpc'
-  let withdrawn = 0
-  if (!approved) {
-    // Why: an untrusted Orca entry surfaces as "Hooks need review". Withdraw only
-    // what this attempt wrote, and only while it is still untrusted: another
-    // Orca may have trusted the identical entry meanwhile.
-    try {
-      withdrawn = withdrawUntrustedRealHomeWrites(adds.writes, adds.command)
-    } catch (error) {
-      console.warn('[codex-real-home-hooks] background trust grant failed:', error)
-    }
-  }
-  if (outcome?.lane === 'rpc' && readCodexHooksEnabled()) {
-    approveOtherRealHomeKeySpellings(outcome.entries)
-  }
-  installRetryAfterMs = recordRealHomeApprovalOutcome(outcome)
-  approval = null
-  // Why from the settings: hooks turned off during the session must not read as
-  // installed, and an opt-out that failed meanwhile may have left the entry.
-  if (readCodexHooksEnabled()) {
-    verdict = approved ? 'installed' : 'unavailable'
-  } else if (verdict !== 'unavailable') {
-    verdict = 'removed'
-  }
-  if (outcome?.lane !== 'rpc') {
-    console.warn(
-      `[codex-real-home-hooks] Codex did not approve Orca's entry (${outcome?.reason ?? 'error'}); ` +
-        `withdrew ${withdrawn} unapproved entr${withdrawn === 1 ? 'y' : 'ies'} this attempt added; ` +
-        `managed lane kept, ${describeRealHomeApprovalRetry(installRetryAfterMs)}`
-    )
+      throw new Error('Orca entries in ~/.codex did not settle')
+    })
+  } catch (error) {
+    console.warn('[codex-real-home-hooks] could not reconcile Orca entries in ~/.codex:', error)
+    return { outcome: 'unavailable', reason: describeError(error) }
   }
 }
 
-async function installRealHomeCodexHook(
-  userDataPath: string,
-  writePolicy: RealHomeCodexHookWritePolicy
-): Promise<{ verdict: RealHomeCodexHookVerdict; grant?: RealHomeBackgroundGrant }> {
-  const material = getCodexManagedHookInstallMaterial()
+function reconcilePass(args: ReconcileArgs): RealHomeCodexHookReconcile | 'pruned' {
   const hooksJsonPath = getRealHomeHooksJsonPath()
+  const tomlPath = getRealHomeConfigTomlPath()
   const hooksWritePath = resolveHooksJsonWritePath(hooksJsonPath)
   // Why: the pre-write guard compares against these bytes; a separate later
   // read would let a concurrent save land between parse and write.
   const { raw: previousRaw, config } = readHooksJsonWithRaw(hooksJsonPath)
-  if (!config) {
-    // Why: an unparseable user file must never be clobbered; without a hook
-    // entry the managed lane keeps status working for this host.
-    console.warn('[codex-real-home-hooks] could not parse', hooksJsonPath, '- managed lane kept')
-    installRetryAfterMs = Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
-    return { verdict: 'unavailable' }
+  if (!isAddableHooksFile(config)) {
+    return {
+      outcome: 'unavailable',
+      reason: `${hooksJsonPath} is not a hooks file Orca can add to`
+    }
   }
-  if (Object.keys(config).some((key) => key !== 'hooks')) {
-    // Why: Codex rejects unknown root keys instead of ignoring them. Avoid a
-    // transient rewrite of a user-owned file that the trust RPC cannot load.
-    installRetryAfterMs = Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
-    return { verdict: 'unavailable' }
-  }
-
-  // Why: the same script the managed lane maintains; deploying here too keeps
-  // host-connect ordering independent of the managed installer loop.
-  writeManagedScript(material.scriptPath, material.script)
-
+  const hooks = config.hooks ?? {}
+  const material = getCodexManagedHookInstallMaterial()
+  const sourcePaths = getRealHomeHookKeySourcePaths()
+  // Why only listed events: an entry Codex has no hash for would wait for review.
+  const listed = args.hashes
+  const events = listed
+    ? material.events.filter((eventName) => listed[CODEX_EVENT_LABEL[eventName]] !== undefined)
+    : material.events
   const plan = planRealHomeCodexHookEntries({
-    hooks: config.hooks ?? {},
-    sourcePath: hooksJsonPath,
-    material,
+    hooks,
+    sourcePath: sourcePaths[0],
+    material: { events, command: material.command },
     isOrcaCommand: createManagedCommandMatcher(getCodexManagedScriptFileName()),
-    policy: writePolicy
+    convertOlderForms: args.convertOlderForms
   })
-  if (plan.changed) {
-    backupRealHomeHooksJsonOnce(userDataPath, previousRaw)
+  const writeHooks = (nextHooks: Record<string, HookDefinition[]>): void => {
+    backupRealHomeHooksJsonOnce(args.userDataPath, previousRaw)
+    assertHooksJsonGeneration(hooksJsonPath, hooksWritePath, previousRaw)
+    // Why: unknown fields inside the file belong to the user; preserve them verbatim.
+    writeHooksJson(hooksWritePath, { ...config, hooks: nextHooks }, { preserveMode: true })
+  }
+  if (plan.prunedChanged) {
+    // Why its own write: dropping a copy shifts user hooks, whose approvals must move
+    // before Orca writes an approval at a slot one of them still holds.
     mutateRealHomeHooksPreservingUserTrust({
-      sourcePaths: getRealHomeHookKeySourcePaths(),
-      tomlPath: getRealHomeConfigTomlPath(),
-      beforeHooks: config.hooks ?? {},
-      afterHooks: plan.hooks,
-      writeHooks: () => {
-        assertHooksJsonGeneration(hooksJsonPath, hooksWritePath, previousRaw)
-        // Why: unknown top-level fields belong to the user (other managers'
-        // metadata); unlike the managed-home writer, preserve them verbatim.
-        writeHooksJson(hooksWritePath, { ...config, hooks: plan.hooks }, { preserveMode: true })
-      }
+      sourcePaths,
+      tomlPath,
+      beforeHooks: hooks,
+      afterHooks: plan.pruned,
+      writeHooks: () => writeHooks(plan.pruned)
     })
-  }
-  if (plan.managedEntries.length === 0) {
-    // Why: every event holds an entry of another form, which its writer keeps trusted.
-    return { verdict: 'installed' }
+    return 'pruned'
   }
 
-  const grantPlan: CodexManagedTrustGrantPlan = {
-    runtimeHomePath: getSystemCodexHomePath(),
-    tomlPath: getRealHomeConfigTomlPath(),
-    managedCommand: material.command,
-    managedEntries: plan.managedEntries,
-    host: { kind: 'native' },
-    telemetryLane: 'real-home',
-    useDefaultCodexHome: true,
-    background: true
+  const trustStates = readHookTrustEntries(tomlPath)
+  const hashes = args.hashes ?? keepOrComputeHashes(plan, trustStates, sourcePaths, args)
+  const approvals = sourcePaths.flatMap((keySource) =>
+    plan.managedEntries.flatMap((entry) => {
+      const trustedHash = hashes[entry.eventLabel]
+      // Why none for null: that Codex lists the entry with no hash, so it runs unapproved.
+      return typeof trustedHash === 'string'
+        ? [{ ...entry, sourcePath: keySource, trustedHash, enabled: true }]
+        : []
+    })
+  )
+  const missing = findMissingCodexHookApprovals(approvals, trustStates)
+  const findStale = (states: ReadonlyMap<string, CodexHookTrustState>): string[] =>
+    findStaleOrcaApprovals(states, approvals, sourcePaths, [hashes, ...args.knownOrcaHashes], plan)
+  if (!plan.changed && missing.length === 0 && findStale(trustStates).length === 0) {
+    return { outcome: 'unchanged' }
   }
-  const current = await findCurrentManagedCodexHookTrust(grantPlan)
-  if (current) {
-    approveOtherRealHomeKeySpellings(current)
-    return { verdict: 'installed' }
-  }
-  return {
-    verdict: 'approving',
-    grant: { plan: grantPlan, writes: plan.writes, command: material.command }
-  }
-}
 
-/**
- * Codex's grant keys ~/.codex as spelled; a pane whose CODEX_HOME names a
- * symlinked home keys it resolved. Codex's hash ignores the path, so it carries.
- */
-function approveOtherRealHomeKeySpellings(granted: readonly CodexTrustEntry[]): void {
-  const [, ...otherSpellings] = getRealHomeHookKeySourcePaths()
-  if (otherSpellings.length === 0 || granted.length === 0) {
-    return
-  }
+  writeManagedScript(material.scriptPath, material.script)
+  writeCodexHookApprovalsBeforeEntries(
+    tomlPath,
+    missing,
+    () => {
+      if (plan.changed) {
+        writeHooks(plan.hooks)
+      }
+    },
+    readsEntryAtApprovedSlot(hooksJsonPath)
+  )
   try {
-    upsertHookTrustEntries(
-      getRealHomeConfigTomlPath(),
-      otherSpellings.flatMap((sourcePath) => granted.map((entry) => ({ ...entry, sourcePath })))
-    )
+    // Why read again: approvals Orca just wrote, or a user's moved one, may sit at a key read stale before.
+    removeHookTrustEntries(tomlPath, findStale(readHookTrustEntries(tomlPath)))
   } catch (error) {
-    // Why not a failure: the spelled key Codex wrote still approves default-home panes.
-    console.warn('[codex-real-home-hooks] could not approve the resolved ~/.codex key:', error)
+    // Why still written: the entry and its approval are in place; a leftover approval matches no hook.
+    console.warn('[codex-real-home-hooks] could not drop stale Orca approvals:', error)
   }
+  return { outcome: 'written' }
 }
 
 /**
- * The user's explicit opt-out: strips Orca's entry and its trust from the real
- * ~/.codex. Joins the system lane an opt-out caller already holds.
+ * Codex has not answered: an entry already in place keeps the approval it has,
+ * so nothing changes; any other entry gets Orca's own hash until Codex answers.
  */
-export async function removeRealHomeCodexHookForOptOut(): Promise<RealHomeCodexHookVerdict> {
+function keepOrComputeHashes(
+  plan: RealHomeCodexHookEntryPlan,
+  trustStates: ReadonlyMap<string, CodexHookTrustState>,
+  sourcePaths: readonly string[],
+  args: ReconcileArgs
+): CodexHookHashes {
+  const hashes: Partial<Record<CodexEventLabel, string | null>> = { ...args.computedHashes }
+  for (const entry of plan.managedEntries) {
+    if (plan.changedLabels.has(entry.eventLabel)) {
+      continue
+    }
+    const approved = sourcePaths
+      .map((sourcePath) => trustStates.get(computeTrustKey({ ...entry, sourcePath }))?.trustedHash)
+      .find((hash) => hash !== undefined)
+    if (approved) {
+      hashes[entry.eventLabel] = approved
+    }
+  }
+  return hashes
+}
+
+/**
+ * Approvals Orca left at a slot its entry no longer holds, such as a copy it
+ * removed from a user's group. Owned only while they hold a hash Orca writes.
+ * Never in an event this run left alone: its entries keep theirs.
+ */
+function findStaleOrcaApprovals(
+  trustStates: ReadonlyMap<string, CodexHookTrustState>,
+  approvals: readonly CodexTrustEntry[],
+  sourcePaths: readonly string[],
+  orcaHashes: readonly CodexHookHashes[],
+  plan: RealHomeCodexHookEntryPlan
+): string[] {
+  const wanted = new Set(
+    approvals.map((entry) => normalizeHookTrustKeyForLookup(computeTrustKey(entry)))
+  )
+  return [...trustStates].flatMap(([key, state]) => {
+    const parts = parseTrustKey(key)
+    return parts &&
+      !plan.untouchedLabels.has(parts.eventLabel) &&
+      !wanted.has(normalizeHookTrustKeyForLookup(key)) &&
+      sourcePaths.some((sourcePath) => codexHookSourcePathsEqual(parts.sourcePath, sourcePath)) &&
+      state.trustedHash !== undefined &&
+      orcaHashes.some((hashes) => hashes[parts.eventLabel] === state.trustedHash)
+      ? [key]
+      : []
+  })
+}
+
+function describeError(error: unknown): string {
+  if (isCodexConfigTomlRefusedError(error)) {
+    return `${getRealHomeConfigTomlPath()} keeps hook approvals inline, so Orca cannot add its own there`
+  }
+  return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * The user's explicit opt-out: strips Orca's entry and its approvals from the
+ * real ~/.codex, moving the approvals of user hooks whose positions shift.
+ * Never throws.
+ */
+export async function removeRealHomeCodexHookForOptOut(
+  codexHashes: readonly CodexHookHashes[] = []
+): Promise<'removed' | 'unavailable'> {
   try {
-    const lane = await runExclusivelyForCodexTrustConfig(getRealHomeConfigTomlPath(), async () => {
-      const lane = await sweepRealHomeCodexHook()
-      const systemHomePath = getSystemCodexHomePath()
+    return await runExclusivelyForCodexTrustConfig(getRealHomeConfigTomlPath(), async () => {
+      const lane = await sweepRealHomeCodexHook(codexHashes)
       // Why 'removed' only: an unread or malformed file may still hold the entry,
-      // so its trust and the ledger that proves ownership must wait for a later pass.
-      if (
-        lane === 'removed' &&
-        readCodexTrustGrantLedgerHomeForReconciliation(systemHomePath) !== null
-      ) {
-        // Why: the ledger outlives a sweep that removed the entry but not its trust.
-        removeSystemManagedHookTrustEntries(systemHomePath, getRealHomeHookKeySourcePaths())
+      // so its approvals and the ledger that proves ownership wait for a later pass.
+      if (lane === 'removed') {
+        // Why: approvals can outlive a sweep that found no entry left to remove.
+        removeSystemManagedHookTrustEntries(
+          getSystemCodexHomePath(),
+          getRealHomeHookKeySourcePaths(),
+          codexHashes
+        )
       }
       return lane
     })
-    verdict = lane
   } catch (error) {
-    console.warn('[codex-real-home-hooks] opt-out cleanup failed; staying on managed lane:', error)
-    verdict = 'unavailable'
-  }
-  return verdict
-}
-
-export const _internals = {
-  resetForTesting(state: RealHomeCodexHookVerdict): void {
-    verdict = state
-    approval = null
-    installRetryAfterMs = 0
-    readCodexHooksEnabled = () => true
-    approvalInternals.resetTimeoutStreakForTesting()
-  },
-  /** The verdict once every queued check and any approval it started have settled. */
-  async settledVerdictForTesting(): Promise<RealHomeCodexHookVerdict> {
-    await runExclusivelyForCodexTrustConfig(getRealHomeConfigTomlPath(), async () => {})
-    while (approval) {
-      await approval.done
-    }
-    return verdict
+    console.warn('[codex-real-home-hooks] opt-out cleanup failed:', error)
+    return 'unavailable'
   }
 }
