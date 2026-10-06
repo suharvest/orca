@@ -160,6 +160,15 @@ for (const mode of ['silent', 'reset'] as const) {
       expect(
         (await findMirroredBrowserPage(client.page, worktreeId, fixture.markerUrl))?.placementKind
       ).toBe('client')
+      // The re-hosted guest must be a working page, not just a rendered one.
+      await navigateGuest(client.page, fixture.markerUrl, fixture.movedUrl)
+      expect(
+        await waitForRenderedClientWebview(
+          client.page,
+          { urlPrefix: fixture.movedUrl, remotePageId: opened.remotePageId },
+          'the re-hosted page never navigated'
+        )
+      ).toBe('x')
       expect(host.app.process().pid, 'the host must not have restarted').toBe(hostPid)
     } finally {
       if (client) {
