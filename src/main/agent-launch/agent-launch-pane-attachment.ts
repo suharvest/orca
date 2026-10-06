@@ -5,7 +5,9 @@
  * names the launch that owns the pane and how it ended; the runtime, and the pane's persisted
  * binding, say whether a process holds it. Once the fate is final for the pane, the tab itself keeps
  * it (`agentLaunchPane.outcome`) for the tab's life, so the pane no longer reads the record. The one
- * in-memory fact is a launch still running in this process, which dies with that launch.
+ * in-memory fact is a launch still running in this process, which dies with that launch. Its pane
+ * attaches as soon as its agent runs, but the launch, not that spawn, settles the window's marker,
+ * so a close while the prompt is still being delivered reaches the launch as the user's.
  */
 
 import {
@@ -20,6 +22,8 @@ import type {
 } from '../../shared/agent-launch-pane-verdict'
 
 type RunningLaunch = {
+  /** The launch's agent holds the pane, or the launch is over: whichever comes first. */
+  settled: Promise<{ tabTakenBack: boolean }>
   finished: Promise<{ tabTakenBack: boolean }>
   /** The user closed the launch's tab while it waited; set by the window's close. */
   closedByUser: boolean
@@ -32,6 +36,8 @@ function paneKeyOf(pane: AgentSessionOperationOwnedPane): string {
 }
 
 export type RunningAgentLaunchPane = {
+  /** The launch's agent runs in the pane: a waiting spawn attaches now, not once the prompt lands. */
+  agentBound(): void
   /** The launch is over; its record says how. `tabTakenBack`: the host is closing the tab. */
   finish(outcome: { tabTakenBack: boolean }): void
   /** The user closed this launch's tab while it waited: the launch must not run, or must stop. */
@@ -44,7 +50,11 @@ export function trackRunningAgentLaunchPane(
 ): RunningAgentLaunchPane {
   const key = paneKeyOf(pane)
   let resolve!: (outcome: { tabTakenBack: boolean }) => void
+  let settle!: (outcome: { tabTakenBack: boolean }) => void
   const running: RunningLaunch = {
+    settled: new Promise((done) => {
+      settle = done
+    }),
     finished: new Promise((done) => {
       resolve = done
     }),
@@ -53,6 +63,7 @@ export function trackRunningAgentLaunchPane(
   runningLaunchesByPane.set(key, running)
   let finished = false
   return {
+    agentBound: () => settle({ tabTakenBack: false }),
     finish: (outcome) => {
       if (finished) {
         return
@@ -61,10 +72,16 @@ export function trackRunningAgentLaunchPane(
       if (runningLaunchesByPane.get(key) === running) {
         runningLaunchesByPane.delete(key)
       }
+      settle(outcome)
       resolve(outcome)
     },
     closedByUser: () => running.closedByUser
   }
+}
+
+/** The launch reports the pane's verdict when it ends; until then the window keeps its marker. */
+export function isAgentLaunchRunningInPane(pane: AgentSessionOperationOwnedPane): boolean {
+  return runningLaunchesByPane.has(paneKeyOf(pane))
 }
 
 /** The window's report that the user closed a pane's tab; only a launch still running cares. */
@@ -129,6 +146,12 @@ async function settleVerdict(
       break
     }
     waitedForLaunch = true
+    if ((await running.settled).tabTakenBack) {
+      return { kind: 'withdrawn' }
+    }
+    if (evidence.isPaneLive(pane.paneKey)) {
+      return { kind: 'proceed' }
+    }
     if ((await running.finished).tabTakenBack) {
       return { kind: 'withdrawn' }
     }

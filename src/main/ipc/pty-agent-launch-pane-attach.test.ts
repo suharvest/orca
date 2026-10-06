@@ -294,6 +294,23 @@ describe('a pane whose process belongs to an agent launch', () => {
     expect(providerSpawn).toHaveBeenCalled()
   })
 
+  it("attaches once the launch's agent holds the pane, leaving the window's marker to the launch", async () => {
+    const providerSpawn = vi.fn(async () => ({ id: 'pty-agent' }))
+    const runtime = registerWithRuntime(providerSpawn, { rows: [] })
+    const running = trackRunningAgentLaunchPane(pane)
+
+    const mounted = mountPane()
+    // The agent runs here; its prompt is still being delivered.
+    runtime.hasLiveTerminalForPaneKey.mockReturnValue(true)
+    running.agentBound()
+
+    await mounted.catch(() => {})
+    expect(providerSpawn).toHaveBeenCalled()
+    // A close now must still reach the launch, so the window keeps the pane's launch marker.
+    expect(runtime.reportAgentLaunchPaneVerdict).not.toHaveBeenCalled()
+    running.finish({ tabTakenBack: false })
+  })
+
   it('after a restart, a settled launch pane spawns as any pane does, without opening the record', async () => {
     const providerSpawn = vi.fn(async () => ({ id: 'pty-ordinary' }))
     const runtime = registerWithRuntime(providerSpawn, { rows: null })

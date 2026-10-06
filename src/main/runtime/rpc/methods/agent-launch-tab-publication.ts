@@ -88,7 +88,7 @@ export type EarlyAgentLaunchTab = {
   ownedPane: AgentSessionOperationOwnedPane
   /** Admission let this request run, so the record now names the pane and tells it how it ended. */
   executing(): void
-  /** The surface exists. */
+  /** The surface exists; an agent in this pane lets the pane's waiting spawn attach to it now. */
   surfacePublished(result: AgentLaunchResult): void
   /** The window has said it shows the tab, so the spawn must bind it without a second reveal. */
   windowShowsTab(): boolean
@@ -215,6 +215,7 @@ export async function publishAgentLaunchTabEarly(
     ownedPane,
     publishing,
     finishRunning: (tabTakenBack) => running.finish({ tabTakenBack }),
+    agentBound: () => running.agentBound(),
     paneIsLive: () => runtime.hasLiveTerminalForPaneKey(paneKey),
     closedByUser: () => running.closedByUser(),
     report: (verdict) =>
@@ -242,6 +243,7 @@ function trackEarlyAgentLaunchTab(args: {
   ownedPane: AgentSessionOperationOwnedPane
   publishing: Promise<AgentLaunchTabPublished>
   finishRunning: (tabTakenBack: boolean) => void
+  agentBound: () => void
   paneIsLive: () => boolean
   closedByUser: () => boolean
   report: (verdict: AgentLaunchPaneVerdict) => void
@@ -269,13 +271,18 @@ function trackEarlyAgentLaunchTab(args: {
     },
     surfacePublished: (result) => {
       ranHere = result.outcome.kind === 'terminal' && result.outcome.paneKey === args.paneKey
+      if (ranHere) {
+        // Before its prompt is delivered, which can take a minute: the pane shows the agent now.
+        args.agentBound()
+      }
     },
     windowShowsTab: () => reply !== null,
     closedByUser: args.closedByUser,
     finish: () => {
       if (ranHere === true) {
-        // The agent's spawn bound the pane; its own spawn settles the tab.
         args.finishRunning(false)
+        // Kept until now so a close while the prompt was delivered still stopped this launch.
+        args.report({ kind: 'proceed' })
         return
       }
       void published.then((answer) => {
