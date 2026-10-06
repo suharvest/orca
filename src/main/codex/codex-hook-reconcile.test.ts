@@ -19,14 +19,17 @@ import type * as CodexCommand from '../codex-cli/command'
 import type * as TrustDerivation from './codex-hook-trust-derivation'
 import type * as RealHomeInstall from './codex-real-home-hook-install'
 
-const mocks = vi.hoisted(() => ({
-  homedir: vi.fn<() => string>(),
-  codexPath: '',
-  probeCodexVersion: vi.fn(),
-  deriveCodexHookHashes: vi.fn(),
-  realHomeRuns: 0,
-  holdRealHome: null as Promise<void> | null
-}))
+const mocks = vi.hoisted(() => {
+  const held: { holdRealHome: Promise<void> | null } = { holdRealHome: null }
+  return {
+    ...held,
+    homedir: vi.fn<() => string>(),
+    codexPath: '',
+    probeCodexVersion: vi.fn(),
+    deriveCodexHookHashes: vi.fn(),
+    realHomeRuns: 0
+  }
+})
 
 vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeOs>()),

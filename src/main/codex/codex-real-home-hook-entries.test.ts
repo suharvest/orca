@@ -19,11 +19,13 @@ import type * as InstallerUtils from '../agent-hooks/installer-utils'
 import type * as RealHomeHooksJson from './codex-real-home-hooks-json'
 import { wrapPosixHookCommand, type HookDefinition } from '../agent-hooks/installer-utils'
 
-const mocks = vi.hoisted(() => ({
-  homedir: vi.fn<() => string>(),
-  beforeHooksJsonGuard: null as (() => void) | null,
-  hooksJsonWrites: 0
-}))
+const mocks = vi.hoisted(() => {
+  const state: { beforeHooksJsonGuard: (() => void) | null; hooksJsonWrites: number } = {
+    beforeHooksJsonGuard: null,
+    hooksJsonWrites: 0
+  }
+  return { ...state, homedir: vi.fn<() => string>() }
+})
 
 vi.mock('node:os', async () => ({
   ...(await vi.importActual<typeof NodeOs>('node:os')),
