@@ -127,7 +127,8 @@ async function reconcile(
   const hashes = options.hashes === undefined ? CODEX_HASHES : options.hashes
   return reconcileRealHomeCodexHookEntries({
     hashes,
-    knownOrcaHashes: options.knownOrcaHashes ?? [computeOrcaCodexHookHashes()],
+    // Why Codex's hashes too: the app's lookup holds the answer an earlier run wrote.
+    knownOrcaHashes: options.knownOrcaHashes ?? [computeOrcaCodexHookHashes(), CODEX_HASHES],
     computedHashes: computeOrcaCodexHookHashes(),
     isEnabled: () => true,
     userDataPath: options.userDataPath ?? userData,
