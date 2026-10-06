@@ -688,6 +688,21 @@ describe('placement', () => {
     expect(result.placement).toEqual({ groupId: 'group-anchor', fallback: 'anchor-group' })
   })
 
+  it("hands a CLI's focused launch to the window with its group, to land there as the window is moved", async () => {
+    const runtime = hostWithWindow()
+
+    await replayLaunch(
+      runtime,
+      { placement: { groupId: 'group-split' }, presentation: 'focused' },
+      CLI
+    )
+
+    expect(runtime.published[0]).toMatchObject({
+      placement: { groupId: 'group-split' },
+      viewer: 'focus-window'
+    })
+  })
+
   it('is not part of what a retry must repeat', async () => {
     const operationId = nextOperationId()
     const runtime = hostWithWindow({ terminalPaneKey: PANE_KEY })
