@@ -170,6 +170,30 @@ describe('placement', () => {
     expect(launchTab()?.groupId).toBe(splitGroupId)
   })
 
+  // The CLI's focused launch activates the workspace before its tab is created; that must not lose it.
+  it.each(
+    (['none', 'focus-window', 'focus-in-workspace', 'reveal-owner'] as const).flatMap((viewer) => [
+      { viewer, focused: 'split' as const },
+      { viewer, focused: 'source' as const }
+    ])
+  )(
+    'lands in a just-created empty split for a $viewer caller ($focused focused)',
+    ({ viewer, focused }) => {
+      const { sourceGroupId, splitGroupId } = twoGroups()
+      store.getState().focusGroup(WT, focused === 'split' ? splitGroupId : sourceGroupId)
+
+      const published = publishAgentLaunchTab(
+        request({ viewer, placement: { groupId: splitGroupId } })
+      )
+
+      expect(published.placement).toEqual({ groupId: splitGroupId })
+      expect(launchTab()?.groupId).toBe(splitGroupId)
+      expect(store.getState().groupsByWorktree[WT]?.map((group) => group.id)).toContain(
+        splitGroupId
+      )
+    }
+  )
+
   it("falls back to the anchor's group when the requested group is gone", () => {
     const { anchor, sourceGroupId } = twoGroups()
 
