@@ -66,12 +66,24 @@ beforeEach(() => {
 
 describe('Codex hook startup', () => {
   it('starts once in app readiness, after the shell PATH is hydrated', async () => {
-    fixture.pathReady = new Promise(() => {})
+    let hydrate: () => void = () => {}
+    fixture.pathReady = new Promise<void>((resolve) => {
+      hydrate = resolve
+    })
 
     await initializeReadyRuntimeServices()
 
     expect(fixture.startCodexHooks).toHaveBeenCalledTimes(1)
-    expect(fixture.startCodexHooks.mock.calls[0]![0].pathReady).toBe(fixture.pathReady)
+    let ready = false
+    const { pathReady } = fixture.startCodexHooks.mock.calls[0]![0]
+    void pathReady.then(() => {
+      ready = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(ready).toBe(false)
+    hydrate()
+    await pathReady
+    expect(ready).toBe(true)
   })
 
   it("reads Codex's per-agent hook setting each time it is asked", async () => {
