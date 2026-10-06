@@ -1,15 +1,17 @@
+import { withTimeout } from '../../shared/promise-timeout-fallback'
 import { getOrcaUserDataPath } from './codex-home-paths'
 import { computeOrcaCodexHookHashes } from './codex-hook-definition'
-import { readEveryKnownCodexHookHashes, resolveCodexHookHashes } from './codex-hook-hash-lookup'
+import {
+  CODEX_HOOK_LAUNCH_WAIT_MS,
+  readEveryKnownCodexHookHashes,
+  resolveCodexHookHashes,
+  startCodexHookHashLookup
+} from './codex-hook-hash-lookup'
+import type { CodexHookAnswer } from './codex-hook-trust-derivation'
 import { reconcileRealHomeCodexHookEntries } from './codex-real-home-hook-install'
 
-/**
- * Keeps Orca's Codex hook entry in ~/.codex true to the setting and to the
- * codex binary in use, writing only on a change. One never-throwing function,
- * called at app start, on the setting turning on, on each native pane spawn,
- * and on Orca-launched Codex launches and resumes. A call that finds the entry,
- * its approval and the binary unchanged reads two files and spawns nothing.
- */
+// Keeps Orca's Codex hook entry in ~/.codex true to the setting and the codex in
+// use; a call that finds nothing changed reads two files and spawns nothing.
 
 type ReconcileConfig = {
   isEnabled: () => boolean
@@ -20,7 +22,6 @@ type ReconcileConfig = {
 }
 
 type ReconcileRequest = {
-  after?: Promise<unknown>
   /** App start and the setting turning on: only they replace an older build's entry. */
   convertOlderForms?: boolean
   /** A launch that runs on ~/.codex whatever the selection, such as a resume of a session there. */
@@ -34,73 +35,58 @@ let rerun = false
 // Why flags, not counters: a request the next run cannot serve (hooks off, ~/.codex not used) is dropped.
 let convertRequested = false
 let realHomeLaunchRequested = false
-let spawnReconcileScheduled = false
 let rerunOnAnswer = false
 
 // Why short: a pending lookup must leave room in a launch's 3 s wait for the stopgap write.
 const ANSWER_WAIT_MS = 500
 
-/** App start, main process only: the settings readers, and the first reconcile once PATH is hydrated. */
-export function startCodexHookReconcile(
-  options: ReconcileConfig & { pathReady: Promise<unknown> }
-): () => void {
+/**
+ * App start, main process only: lets Orca ask Codex for its hook hashes, and
+ * reconciles ~/.codex, both once the shell PATH is hydrated.
+ */
+export function startCodexHooks(options: ReconcileConfig & { pathReady: Promise<unknown> }): void {
+  const pathReady = options.pathReady.catch(() => {})
+  startCodexHookHashLookup({ pathReady, isEnabled: options.isEnabled })
   config = {
     isEnabled: options.isEnabled,
     usesRealHome: options.usesRealHome,
     resolveLaunchHome: options.resolveLaunchHome
   }
-  void reconcileCodexHooks({ after: options.pathReady, convertOlderForms: true })
-  return () => {
-    config = null
-  }
+  // Why held as the running reconcile: launches before PATH is hydrated wait on it, not run early.
+  void reconcileAfter(pathReady, { convertOlderForms: true })
 }
 
 /** Never throws; a call while one runs makes that one run again, so no change is missed. */
 export function reconcileCodexHooks(request: ReconcileRequest = {}): Promise<void> {
+  return reconcileAfter(Promise.resolve(), request)
+}
+
+function reconcileAfter(ready: Promise<unknown>, request: ReconcileRequest): Promise<void> {
   convertRequested ||= request.convertOlderForms === true
   realHomeLaunchRequested ||= request.realHomeLaunch === true
   if (running) {
     rerun = true
     return running
   }
-  const after = request.after ?? Promise.resolve()
-  running = after.catch(() => {}).then(runUntilSettled)
+  running = ready.then(runUntilSettled)
   return running
 }
 
-/** A native pane spawned: reconciles on the next tick, off the spawn's path, in the app only. */
+/** A native pane spawned: reconciles after the spawn, in the app only. */
 export function scheduleCodexHookReconcile(): void {
-  // Why once: one spawn builds its env through several builders.
-  if (config && !spawnReconcileScheduled) {
-    spawnReconcileScheduled = true
-    setImmediate(() => {
-      spawnReconcileScheduled = false
-      // Why not join a running one: it reads the files after this spawn anyway, and a rerun would repeat it.
-      if (!running) {
-        void reconcileCodexHooks()
-      }
-    })
+  // Why not join a running one: it reads the files after this spawn anyway (so a spawn's several env builders run one).
+  if (config && !running) {
+    void reconcileCodexHooks()
   }
 }
 
-/** A reconcile, waited for at most `timeoutMs`: a Codex launch goes ahead rather than wait longer. */
-export async function reconcileCodexHooksWithin(
-  timeoutMs: number,
-  request: Omit<ReconcileRequest, 'after'> = {}
-): Promise<void> {
-  await settleWithin(reconcileCodexHooks(request), timeoutMs)
-}
-
-async function settleWithin<T>(work: Promise<T>, timeoutMs: number): Promise<T | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const result = await Promise.race([
-    work,
-    new Promise<null>((resolve) => {
-      timer = setTimeout(() => resolve(null), timeoutMs)
-    })
-  ])
-  clearTimeout(timer)
-  return result
+/** A Codex launch on ~/.codex: a reconcile, waited for briefly, so the launch goes ahead rather than wait longer. */
+export function reconcileCodexHooksForLaunch(): Promise<void> {
+  return withTimeout(
+    reconcileCodexHooks({ realHomeLaunch: true }),
+    CODEX_HOOK_LAUNCH_WAIT_MS,
+    undefined
+  )
 }
 
 /**
@@ -152,7 +138,7 @@ async function reconcileOnce(request: {
     return
   }
   const lookup = resolveCodexHookHashes()
-  const answer = await settleWithin(lookup, ANSWER_WAIT_MS)
+  const answer = await withTimeout<CodexHookAnswer | null>(lookup, ANSWER_WAIT_MS, null)
   if (!answer && !rerunOnAnswer) {
     // Why: the stopgap below goes in now, as main's did; Codex's hash replaces it once it answers.
     rerunOnAnswer = true
@@ -183,7 +169,6 @@ export const _internals = {
     rerun = false
     convertRequested = false
     realHomeLaunchRequested = false
-    spawnReconcileScheduled = false
     rerunOnAnswer = false
   },
   /** Settles once no reconcile runs. */

@@ -8,8 +8,7 @@ import {
 } from '../codex/codex-legacy-session-resume'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 import { codexHookService } from '../codex/hook-service'
-import { CODEX_HOOK_LAUNCH_WAIT_MS } from '../codex/codex-hook-hash-lookup'
-import { reconcileCodexHooksWithin } from '../codex/codex-hook-reconcile'
+import { reconcileCodexHooksForLaunch } from '../codex/codex-hook-reconcile'
 import { ensureCodexDaemonSocketGuard } from '../codex/codex-config-mirror'
 import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
@@ -94,9 +93,7 @@ export async function prepareCodexSessionResumeForLaunch(args: {
       try {
         if (isSystemHome) {
           // Why bounded: the resume waits only briefly for a reconcile; it runs on ~/.codex whatever the selection.
-          if (hooksEnabled) {
-            await reconcileCodexHooksWithin(CODEX_HOOK_LAUNCH_WAIT_MS, { realHomeLaunch: true })
-          }
+          await reconcileCodexHooksForLaunch()
         } else if (hooksEnabled) {
           await codexHookService.installForLaunchPrep(resumeHome, true)
         } else {

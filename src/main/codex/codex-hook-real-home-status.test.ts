@@ -28,7 +28,7 @@ vi.mock('./codex-hook-trust-derivation', async (importOriginal) => ({
 }))
 
 import { CodexHookService } from './codex-hook-service-implementation'
-import { _internals as reconcileInternals, startCodexHookReconcile } from './codex-hook-reconcile'
+import { _internals as reconcileInternals, startCodexHooks } from './codex-hook-reconcile'
 import {
   _internals as lookupInternals,
   resolveCodexHookHashes,
@@ -44,7 +44,6 @@ import type { CodexHookAnswer, CodexHookHashes } from './codex-hook-trust-deriva
 let root: string
 let home: string
 let userData: string
-let stop: (() => void) | null = null
 
 const CODEX_HASHES: CodexHookHashes = Object.fromEntries(
   Object.values(CODEX_EVENT_LABEL).map((label) => [label, `sha256:codex-${label}`])
@@ -94,8 +93,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  stop?.()
-  stop = null
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   rmSync(root, { recursive: true, force: true })
@@ -157,7 +154,7 @@ describe('Codex hook status for ~/.codex', () => {
     mkdirSync(join(home, '.codex'), { recursive: true })
     writeFileSync(hooksPath(), '{ not json')
     const managedHome = join(userData, 'codex-runtime-home', 'home')
-    stop = startCodexHookReconcile({
+    startCodexHooks({
       isEnabled: () => false,
       usesRealHome: () => true,
       resolveLaunchHome: () => managedHome,
@@ -174,7 +171,7 @@ describe('Codex hook status for ~/.codex', () => {
     mkdirSync(join(home, '.codex'), { recursive: true })
     writeFileSync(hooksPath(), '{ not json')
     const accountHome = join(userData, 'codex-accounts', 'one', 'home')
-    stop = startCodexHookReconcile({
+    startCodexHooks({
       isEnabled: () => false,
       usesRealHome: () => false,
       resolveLaunchHome: () => accountHome,

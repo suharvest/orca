@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   sharedHomePath: '',
   installForLaunchPrep: vi.fn(),
   refreshRuntimeUserHooksForLaunchPrep: vi.fn(),
-  reconcileCodexHooksWithin: vi.fn(async () => {}),
+  reconcileCodexHooksForLaunch: vi.fn(async () => {}),
   prepareCodexSessionResume: vi.fn(),
   prepareLegacySharedCodexSessionResume: vi.fn()
 }))
@@ -27,7 +27,7 @@ vi.mock('../codex/hook-service', () => ({
   }
 }))
 vi.mock('../codex/codex-hook-reconcile', () => ({
-  reconcileCodexHooksWithin: mocks.reconcileCodexHooksWithin
+  reconcileCodexHooksForLaunch: mocks.reconcileCodexHooksForLaunch
 }))
 vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
   isAgentStatusHooksEnabledForAgent: () => mocks.hooksEnabled
@@ -138,7 +138,7 @@ describe('Codex session resume daemon socket guard', () => {
     const preparation = await resume()
 
     expect(preparation).toMatchObject({ codexHomePath: mocks.systemHomePath })
-    expect(mocks.reconcileCodexHooksWithin).toHaveBeenCalledTimes(1)
+    expect(mocks.reconcileCodexHooksForLaunch).toHaveBeenCalledTimes(1)
     expect(existsSync(join(mocks.systemHomePath, 'config.toml'))).toBe(false)
   })
 })

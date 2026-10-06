@@ -21,7 +21,7 @@ vi.mock('../codex/hook-service', () => ({
     refreshRuntimeUserHooksForLaunchPrep: vi.fn()
   }
 }))
-vi.mock('../codex/codex-hook-reconcile', () => ({ reconcileCodexHooksWithin: vi.fn() }))
+vi.mock('../codex/codex-hook-reconcile', () => ({ reconcileCodexHooksForLaunch: vi.fn() }))
 vi.mock('../codex/codex-home-paths', () => ({
   getCodexSessionBackfillStateDirPath: () => join(homes.system, 'backfill'),
   getSystemCodexHomePath: () => homes.system,

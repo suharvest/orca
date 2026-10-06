@@ -13,8 +13,7 @@ import { startPreGoneCrashSampling } from '../crash-reporting/process-gone-diagn
 import { recordProcessGoneCrash } from './main-window-lifecycle-flags'
 import { handleGpuChildCrash } from './gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/gpu-crash-fallback-decision'
-import { startCodexHookHashLookup } from '../codex/codex-hook-hash-lookup'
-import { startCodexHookReconcile } from '../codex/codex-hook-reconcile'
+import { startCodexHooks } from '../codex/codex-hook-reconcile'
 import { hydrateAgentCliShellPath } from '../agent-hooks/local-agent-cli-presence'
 import {
   installManagedAgentHooks,
@@ -100,22 +99,18 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
     refreshInstalledOpenCodeStatusPlugins(store.getSettings())
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
-  // Why after PATH hydration: the first Codex launch usually finds Codex's hook hash ready.
-  const codexPathReady = app.isPackaged ? hydrateAgentCliShellPath() : Promise.resolve()
-  const isCodexHooksEnabled = (): boolean =>
-    isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex')
-  startCodexHookHashLookup({ pathReady: codexPathReady, isEnabled: isCodexHooksEnabled })
-  // Why its own start: launches and resumes find the reconcile in flight before CLI detection ends.
-  startCodexHookReconcile({
-    isEnabled: isCodexHooksEnabled,
+  // Why here, after PATH hydration: the first Codex launch usually finds Codex's hook hash ready,
+  // and launches find the reconcile in flight before CLI detection ends.
+  startCodexHooks({
+    pathReady: app.isPackaged ? hydrateAgentCliShellPath() : Promise.resolve(),
+    isEnabled: () => isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex'),
     usesRealHome: () => state.codexRuntimeHome?.isHostSystemDefaultRealHomeSelected() === true,
     resolveLaunchHome: () => {
       if (!state.codexRuntimeHome) {
         throw new Error('Codex runtime home service is not initialized')
       }
       return state.codexRuntimeHome.resolveHostCodexHomePathForLaunchReadOnly()
-    },
-    pathReady: codexPathReady
+    }
   })
   const startupManagedHookSettings = store.getSettings()
   const shouldReconcileStartupManagedHooks =

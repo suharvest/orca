@@ -1,46 +1,85 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 
-/**
- * Guards the app-start line that lets Orca ask Codex for its hook hashes, and
- * warms the answer once the shell PATH is hydrated. Without it every managed
- * Codex launch writes no Orca hook (nothing may ask), and without the PATH
- * wait a packaged app looks for codex on launchd's PATH and finds none.
- *
- * Source-level because the call sits inside the ready-phase composition, which
- * has no runtime seam; the lookup's own ordering is tested in codex-hook-hash-lookup.test.ts.
- */
-describe('Codex hook startup wiring', () => {
-  const source = readFileSync(
-    join(process.cwd(), 'src/main/startup/main-process-ready-runtime.ts'),
-    'utf8'
-  ).replace(/\r\n/g, '\n')
-  const READY_ENTRY = 'export async function initializeReadyRuntimeServices('
-  const entryBody = source.slice(source.indexOf(READY_ENTRY)).split('\nexport ')[0]!
+const fixture = vi.hoisted(() => {
+  const settings: Partial<GlobalSettings> = { agentStatusHooksEnabled: true }
+  return {
+    app: { isPackaged: true, on: vi.fn() },
+    settings,
+    pathReady: Promise.resolve(),
+    startCodexHooks: vi.fn()
+  }
+})
 
-  it('starts the lookup unconditionally in app readiness, after the shell PATH is hydrated', () => {
-    expect(source).toContain(
-      "import { startCodexHookHashLookup } from '../codex/codex-hook-hash-lookup'"
-    )
-    expect(entryBody.split('startCodexHookHashLookup(').length - 1).toBe(1)
-    // Why pin the indent: inside an added `if (...)` the call would stop running on most starts.
-    expect(entryBody).toContain('\n  startCodexHookHashLookup({')
-    expect(entryBody).toContain(
-      'const codexPathReady = app.isPackaged ? hydrateAgentCliShellPath() : Promise.resolve()'
-    )
-    expect(entryBody).toContain('startCodexHookHashLookup({ pathReady: codexPathReady,')
+vi.mock('electron', () => ({ app: fixture.app, nativeTheme: {} }))
+vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
+vi.mock('../codex/codex-hook-reconcile', () => ({ startCodexHooks: fixture.startCodexHooks }))
+vi.mock('../agent-hooks/local-agent-cli-presence', () => ({
+  hydrateAgentCliShellPath: () => fixture.pathReady
+}))
+// Why the real predicate: the start must read the same opt-out the rest of Orca does.
+vi.mock(
+  '../agent-hooks/managed-agent-hook-controls',
+  async () => await import('../../shared/agent-status-hooks-setting')
+)
+vi.mock('./main-process-state', () => ({
+  mainProcessState: { store: { getSettings: () => fixture.settings } }
+}))
+vi.mock('./main-process-runtime-service', () => ({
+  initializeMainProcessRuntime: () => ({
+    setAgentBrowserBridge: vi.fn(),
+    setEmulatorBridge: vi.fn()
+  }),
+  configureRuntimeServices: vi.fn()
+}))
+vi.mock('../star-nag/service')
+vi.mock('../browser/agent-browser-bridge')
+vi.mock('../emulator/emulator-bridge')
+vi.mock('../runtime/rpc/dispatcher')
+vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))
+vi.mock('../browser/browser-client-page-automation-runtime')
+vi.mock('../crash-reporting/process-gone-diagnostics')
+vi.mock('./main-window-lifecycle-flags')
+vi.mock('./gpu-lifecycle')
+vi.mock('./configure-process', () => ({ shouldInstallManagedHooks: () => false }))
+vi.mock('../agent-hooks/install-telemetry')
+vi.mock('./main-process-observers')
+vi.mock('./main-process-account-services')
+vi.mock('./main-process-automations')
+vi.mock('./main-process-plugins')
+vi.mock('../worktree-trash')
+vi.mock('./worktree-removal-records-load')
+vi.mock('./first-window-deferral')
+vi.mock('./startup-diagnostics')
+vi.mock('../opencode/opencode-status-plugin-startup-refresh')
+
+import { initializeReadyRuntimeServices } from './main-process-ready-runtime'
+
+// Why this file: without the start, no managed launch may ask Codex for its hook hash
+// and ~/.codex is never reconciled; without the PATH wait, a packaged app looks
+// for codex on launchd's PATH and finds none.
+
+beforeEach(() => {
+  fixture.startCodexHooks.mockClear()
+  fixture.settings.disabledTuiAgents = []
+})
+
+describe('Codex hook startup', () => {
+  it('starts once in app readiness, after the shell PATH is hydrated', async () => {
+    fixture.pathReady = new Promise(() => {})
+
+    await initializeReadyRuntimeServices()
+
+    expect(fixture.startCodexHooks).toHaveBeenCalledTimes(1)
+    expect(fixture.startCodexHooks.mock.calls[0]![0].pathReady).toBe(fixture.pathReady)
   })
 
-  it("starts ~/.codex's reconcile unconditionally, after the same PATH hydration", () => {
-    expect(source).toContain(
-      "import { startCodexHookReconcile } from '../codex/codex-hook-reconcile'"
-    )
-    expect(entryBody.split('startCodexHookReconcile(').length - 1).toBe(1)
-    expect(entryBody).toContain('\n  startCodexHookReconcile({')
-    const reconcileStart = entryBody.slice(entryBody.indexOf('startCodexHookReconcile({'))
-    expect(reconcileStart.slice(0, reconcileStart.indexOf('\n  })'))).toContain(
-      'pathReady: codexPathReady'
-    )
+  it("reads Codex's per-agent hook setting each time it is asked", async () => {
+    await initializeReadyRuntimeServices()
+    const { isEnabled } = fixture.startCodexHooks.mock.calls[0]![0]
+
+    expect(isEnabled()).toBe(true)
+    fixture.settings.disabledTuiAgents = ['codex']
+    expect(isEnabled()).toBe(false)
   })
 })

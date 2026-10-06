@@ -62,11 +62,11 @@ vi.mock('./codex-real-home-hook-install', async (importOriginal) => {
 import {
   _internals,
   reconcileCodexHooks,
-  reconcileCodexHooksWithin,
+  reconcileCodexHooksForLaunch,
   scheduleCodexHookReconcile,
-  startCodexHookReconcile
+  startCodexHooks
 } from './codex-hook-reconcile'
-import { _internals as lookupInternals, startCodexHookHashLookup } from './codex-hook-hash-lookup'
+import { _internals as lookupInternals } from './codex-hook-hash-lookup'
 import { readRealHomeHooksFileShapeProblem } from './codex-real-home-hooks-json'
 import {
   buildCodexManagedHook,
@@ -85,7 +85,6 @@ let home: string
 let userData: string
 let enabled: boolean
 let usesRealHome: boolean
-let stop: (() => void) | null = null
 
 const CODEX_HASHES: CodexHookHashes = Object.fromEntries(
   Object.values(CODEX_EVENT_LABEL).map((label) => [label, `sha256:codex-${label}`])
@@ -129,13 +128,12 @@ function snapshot(dir: string): Map<string, { bytes: string; mtimeMs: number }> 
   )
 }
 
-async function start(): Promise<void> {
-  startCodexHookHashLookup({ pathReady: Promise.resolve(), isEnabled: () => false })
-  stop = startCodexHookReconcile({
+async function start(pathReady: Promise<unknown> = Promise.resolve()): Promise<void> {
+  startCodexHooks({
     isEnabled: () => enabled,
     usesRealHome: () => usesRealHome,
     resolveLaunchHome: () => (usesRealHome ? null : join(userData, 'codex-runtime-home')),
-    pathReady: Promise.resolve()
+    pathReady
   })
   await _internals.settledForTesting()
 }
@@ -172,8 +170,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  stop?.()
-  stop = null
   vi.clearAllMocks()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
@@ -203,6 +199,36 @@ describe('reconcileCodexHooks', () => {
     })
   })
 
+  it('asks Codex and converts an older build only once PATH is hydrated, with launches waiting on it', async () => {
+    writeHooks({ Stop: [olderBuildStop()] })
+    let hydrate!: () => void
+    const started = start(
+      new Promise<void>((resolve) => {
+        hydrate = resolve
+      })
+    )
+    const launch = reconcileCodexHooksForLaunch()
+    // Why past the reconcile's 500 ms answer wait: an early run would write its stopgap by then.
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
+    expect(mocks.realHomeRuns).toBe(0)
+
+    hydrate()
+    await Promise.all([started, launch])
+
+    expect(mocks.realHomeRuns).toBe(1)
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+  })
+
+  it('writes nothing for a launch while hooks are off', async () => {
+    enabled = false
+    await start()
+
+    await reconcileCodexHooksForLaunch()
+
+    expect(existsSync(codexHome())).toBe(false)
+  })
+
   it('writes nothing and spawns nothing across many concurrent launches when nothing changed', async () => {
     await start()
     const before = snapshot(codexHome())
@@ -212,9 +238,7 @@ describe('reconcileCodexHooks', () => {
     await Promise.all(
       Array.from({ length: 20 }, (_, index) => {
         scheduleCodexHookReconcile()
-        return index % 2 === 0
-          ? reconcileCodexHooksWithin(3_000, { realHomeLaunch: true })
-          : reconcileCodexHooks()
+        return index % 2 === 0 ? reconcileCodexHooksForLaunch() : reconcileCodexHooks()
       })
     )
     await settleSpawn()
@@ -318,7 +342,7 @@ describe('reconcileCodexHooks', () => {
     usesRealHome = false
     await start()
 
-    await reconcileCodexHooksWithin(3_000, { realHomeLaunch: true })
+    await reconcileCodexHooksForLaunch()
 
     expect(Object.keys(readHooks())).toContain('Stop')
   })
@@ -391,7 +415,7 @@ describe('while the lookup is still asking Codex', () => {
     const release = holdDerivation()
 
     const startedAt = Date.now()
-    await reconcileCodexHooksWithin(3_000, { realHomeLaunch: true })
+    await reconcileCodexHooksForLaunch()
 
     expect(Date.now() - startedAt).toBeLessThan(3_000)
     expect(stopApproval()).toBe(computeOrcaCodexHookHashes().stop)
@@ -407,7 +431,7 @@ describe('while the lookup is still asking Codex', () => {
     writeFileSync(mocks.codexPath, 'codex 0.161.0')
     const release = holdDerivation()
 
-    await reconcileCodexHooksWithin(3_000, { realHomeLaunch: true })
+    await reconcileCodexHooksForLaunch()
     expect(snapshot(codexHome())).toEqual(before)
 
     const runsBeforeAnswer = mocks.realHomeRuns

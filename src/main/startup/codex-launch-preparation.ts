@@ -3,8 +3,7 @@ import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-sele
 import { codexHookService } from '../codex/hook-service'
 import { getDefaultWslDistro } from '../wsl'
 import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
-import { reconcileCodexHooksWithin } from '../codex/codex-hook-reconcile'
-import { CODEX_HOOK_LAUNCH_WAIT_MS } from '../codex/codex-hook-hash-lookup'
+import { reconcileCodexHooksForLaunch } from '../codex/codex-hook-reconcile'
 import { mainProcessState as state } from './main-process-state'
 
 export async function prepareCodexRuntimeHomeForLaunch(
@@ -26,8 +25,8 @@ export async function prepareCodexRuntimeHomeForLaunch(
   if (runtimeHomePath === null && target?.runtime !== 'wsl') {
     // Why only a Codex launch waits: the pane spawn already schedules the reconcile, which
     // writes only on a change; plain terminals and structured launches never wait on it.
-    if (launchesCodex && isAgentStatusHooksEnabledForAgent(state.store?.getSettings(), 'codex')) {
-      await reconcileCodexHooksWithin(CODEX_HOOK_LAUNCH_WAIT_MS, { realHomeLaunch: true })
+    if (launchesCodex) {
+      await reconcileCodexHooksForLaunch()
     }
     return null
   }

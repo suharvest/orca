@@ -11,6 +11,7 @@ import {
 import { writeCodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
 import { getCodexHookTrustSignature } from './codex-hook-identity'
 import { setupCodexHookHomes } from './hook-service-test-harness'
+import { _internals as lookupInternals } from './codex-hook-hash-lookup'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
@@ -27,7 +28,7 @@ import { CodexHookService, getCodexManagedHookInstallMaterial } from './hook-ser
 import {
   _internals as reconcileInternals,
   reconcileCodexHooks,
-  startCodexHookReconcile
+  startCodexHooks
 } from './codex-hook-reconcile'
 import { getOrcaManagedCodexHomePath } from './codex-home-paths'
 import {
@@ -99,17 +100,16 @@ function snapshotRealCodexHome(): Map<string, { bytes: string; mtimeMs: number }
 
 async function reconcileWithHooksOff(): Promise<void> {
   reconcileInternals.resetForTesting()
-  const stop = startCodexHookReconcile({
+  startCodexHooks({
     isEnabled: () => false,
     usesRealHome: () => true,
     resolveLaunchHome: () => null,
     pathReady: Promise.resolve()
   })
-  try {
-    await reconcileCodexHooks({ convertOlderForms: true, realHomeLaunch: true })
-  } finally {
-    stop()
-  }
+  await reconcileCodexHooks({ convertOlderForms: true, realHomeLaunch: true })
+  // Why: the start also lets the lookup ask Codex, and no Codex stands in here.
+  reconcileInternals.resetForTesting()
+  lookupInternals.resetForTesting()
 }
 
 describe('the shared real-home Codex entry', () => {
