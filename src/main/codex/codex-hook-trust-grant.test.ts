@@ -27,6 +27,17 @@ import {
   type CodexTrustEntry
 } from './config-toml-trust'
 
+// Why: the guest identity probe needs wsl.exe; a failed probe leaves the grant unstamped.
+vi.mock('../../shared/child-process/run-process', () => ({
+  runProcess: vi.fn(async () => ({
+    code: 1,
+    signal: null,
+    timedOut: false,
+    stdout: '',
+    stderr: ''
+  }))
+}))
+
 let userDataDir: string
 let runtimeHomeDir: string
 let previousUserDataPath: string | undefined
@@ -73,7 +84,11 @@ function managedEntry(eventLabel: CodexTrustEntry['eventLabel']): CodexTrustEntr
 
 function buildPlan(
   entries: CodexTrustEntry[],
-  host: CodexManagedTrustGrantPlan['host'] = { kind: 'native' }
+  host: CodexManagedTrustGrantPlan['host'] = {
+    kind: 'wsl',
+    distro: 'Ubuntu',
+    linuxRuntimeHome: runtimeHomeDir
+  }
 ): CodexManagedTrustGrantPlan {
   return {
     runtimeHomePath: runtimeHomeDir,
@@ -149,7 +164,7 @@ describe('grantManagedCodexHookTrust', () => {
     const request = runner.mock.calls[0]![0]!
     expect(request.managedCommand).toBe(MANAGED_COMMAND)
     expect(request.expectedTrustKeys).toHaveLength(2)
-    expect(request.invocation.env?.CODEX_HOME).toBe(runtimeHomeDir)
+    expect(request.hooksListCwd).toBe(runtimeHomeDir)
 
     const ledgerHome = readCodexTrustGrantLedgerHome(runtimeHomeDir)
     expect(ledgerHome).not.toBeNull()
@@ -282,7 +297,7 @@ describe('grantManagedCodexHookTrust', () => {
       reason: 'retry-cached'
     })
     expect(runner).toHaveBeenCalledTimes(1)
-    expect(codexAppServerCapabilityCache.shouldTry('native')).toBe(true)
+    expect(codexAppServerCapabilityCache.shouldTry('wsl:Ubuntu')).toBe(true)
     // Why: an inline grant costs its launch the full timeout, so it keeps the long cooldown.
     vi.setSystemTime(1_000 + 10_001)
     expect(await grantManagedCodexHookTrust(plan)).toMatchObject({ reason: 'retry-cached' })
@@ -320,7 +335,7 @@ describe('grantManagedCodexHookTrust', () => {
       lane: 'fallback',
       reason: 'verify-failed'
     })
-    expect(codexAppServerCapabilityCache.shouldTry('native')).toBe(true)
+    expect(codexAppServerCapabilityCache.shouldTry('wsl:Ubuntu')).toBe(true)
     expect(getCodexTrustGrantDiagnostics()).toMatchObject({ verifyFailed: 1 })
   })
 
@@ -411,7 +426,7 @@ describe('grantManagedCodexHookTrust', () => {
     mkdirSync(otherHome, { recursive: true })
     // Why: the probe dedupe only holds the first session on an unproven host.
     // A known-supported host must keep its intended launch concurrency.
-    codexAppServerCapabilityCache.rememberSupported('native')
+    codexAppServerCapabilityCache.rememberSupported('wsl:Ubuntu')
     let inFlight = 0
     let maxInFlight = 0
     const releases: (() => void)[] = []
@@ -495,7 +510,7 @@ describe('trust-grant telemetry detail', () => {
     _internals.setGrantSessionRunner(async () => grantedSessionResult(entries))
 
     expect(await grantManagedCodexHookTrust(buildPlan(entries))).toMatchObject({ lane: 'rpc' })
-    expect(events).toEqual([{ outcome: 'granted', hostKind: 'native', lane: 'real-home' }])
+    expect(events).toEqual([{ outcome: 'granted', hostKind: 'wsl', lane: 'real-home' }])
   })
 
   it('reports the managed lane independently of host kind', async () => {
@@ -504,7 +519,7 @@ describe('trust-grant telemetry detail', () => {
     _internals.setGrantSessionRunner(async () => grantedSessionResult(entries))
 
     await grantManagedCodexHookTrust({ ...buildPlan(entries), telemetryLane: 'managed' })
-    expect(events).toEqual([{ outcome: 'granted', hostKind: 'native', lane: 'managed' }])
+    expect(events).toEqual([{ outcome: 'granted', hostKind: 'wsl', lane: 'managed' }])
   })
 
   it('classifies error fallbacks on the wire', async () => {
@@ -521,7 +536,7 @@ describe('trust-grant telemetry detail', () => {
     expect(events).toEqual([
       {
         outcome: 'fallback',
-        hostKind: 'native',
+        hostKind: 'wsl',
         lane: 'real-home',
         reason: 'error',
         errorClass: 'binary-missing'
@@ -542,7 +557,7 @@ describe('trust-grant telemetry detail', () => {
     expect(events).toEqual([
       {
         outcome: 'verify_failed',
-        hostKind: 'native',
+        hostKind: 'wsl',
         lane: 'real-home',
         reason: 'verify-failed',
         verifyClass: 'post-grant-untrusted'
@@ -559,7 +574,7 @@ describe('trust-grant telemetry detail', () => {
     expect(events).toEqual([
       {
         outcome: 'verify_failed',
-        hostKind: 'native',
+        hostKind: 'wsl',
         lane: 'real-home',
         reason: 'verify-failed',
         verifyClass: 'duplicate-key'
