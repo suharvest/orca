@@ -27,9 +27,6 @@ type CodexTrustGrantRequestInput = {
   runtimeHomePath: string
   managedCommand: string
   expectedTrustKeys: string[]
-  useDefaultCodexHome?: boolean
-  /** Overrides the native deadline; WSL keeps its own. */
-  timeoutMs?: number
 }
 
 export type ResolvedCodexTrustGrantHost = {
@@ -73,23 +70,18 @@ export function resolveNativeCodexTrustGrantHost(): ResolvedCodexTrustGrantHost 
   const command = resolveCodexCommand()
   return {
     binaryStamp: command === 'codex' ? null : buildNativeCodexBinaryStamp(command),
-    buildRequest: (input) => {
-      const useDefaultCodexHome = input.useDefaultCodexHome === true
-      return {
-        invocation: {
-          command,
-          args: ['app-server'],
-          cliPath: command,
-          ...(useDefaultCodexHome
-            ? { envToDelete: ['CODEX_HOME'] }
-            : { env: { CODEX_HOME: input.runtimeHomePath } }),
-          timeoutMs: input.timeoutMs ?? NATIVE_GRANT_TIMEOUT_MS
-        },
-        hooksListCwd: input.runtimeHomePath,
-        expectedTrustKeys: input.expectedTrustKeys,
-        managedCommand: input.managedCommand
-      }
-    }
+    buildRequest: (input) => ({
+      invocation: {
+        command,
+        args: ['app-server'],
+        cliPath: command,
+        env: { CODEX_HOME: input.runtimeHomePath },
+        timeoutMs: NATIVE_GRANT_TIMEOUT_MS
+      },
+      hooksListCwd: input.runtimeHomePath,
+      expectedTrustKeys: input.expectedTrustKeys,
+      managedCommand: input.managedCommand
+    })
   }
 }
 

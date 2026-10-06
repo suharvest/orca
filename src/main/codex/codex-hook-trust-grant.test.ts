@@ -10,12 +10,12 @@ import {
 import { codexAppServerCapabilityCache } from './codex-app-server-capability-cache'
 import {
   _internals,
-  CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS,
   getCodexTrustGrantDiagnostics,
   grantManagedCodexHookTrust,
   type CodexManagedTrustGrantPlan
 } from './codex-hook-trust-grant'
 import { removeSelfComputedTrustBeforeGrant } from './codex-managed-trust-grant-plan'
+import { CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS } from './codex-trust-grant-cooldown'
 import { setCodexTrustGrantTelemetry } from './codex-trust-grant-telemetry'
 import { readCodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
 import {
@@ -157,21 +157,6 @@ describe('grantManagedCodexHookTrust', () => {
     expect(getCodexTrustGrantDiagnostics()).toMatchObject({ granted: 1, fellBack: 0 })
   })
 
-  it('builds a default-home grant invocation without an inherited CODEX_HOME', async () => {
-    const entries = [managedEntry('stop')]
-    const runner = vi.fn(async (_request: CodexHookTrustGrantRequest) =>
-      grantedSessionResult(entries)
-    )
-    _internals.setGrantSessionRunner(runner)
-
-    expect(
-      await grantManagedCodexHookTrust({ ...buildPlan(entries), useDefaultCodexHome: true })
-    ).toMatchObject({ lane: 'rpc' })
-    const invocation = runner.mock.calls[0]![0]!.invocation
-    expect(invocation.env?.CODEX_HOME).toBeUndefined()
-    expect(invocation.envToDelete).toContain('CODEX_HOME')
-  })
-
   it('removes equivalent Windows fallback keys before the RPC writes canonical trust', async () => {
     const entry: CodexTrustEntry = {
       ...managedEntry('stop'),
@@ -307,28 +292,6 @@ describe('grantManagedCodexHookTrust', () => {
     vi.setSystemTime(1_000 + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS)
     expect(await grantManagedCodexHookTrust(plan)).toMatchObject({ lane: 'rpc' })
     expect(runner).toHaveBeenCalledTimes(2)
-  })
-
-  it('neither starts nor waits on a cooldown for a background grant', async () => {
-    const entries = [managedEntry('session_start')]
-    const runner = vi.fn((): Promise<CodexHookTrustGrantSessionResult> => {
-      throw new Error('codex app-server exited before completing the session')
-    })
-    _internals.setGrantSessionRunner(runner)
-    const background: CodexManagedTrustGrantPlan = { ...buildPlan(entries), background: true }
-    const inline = buildPlan(entries)
-
-    // Why: the real-home lane schedules a background retry; a second schedule here could only disagree.
-    expect(await grantManagedCodexHookTrust(background)).toMatchObject({ reason: 'error' })
-    expect(_internals.transientCooldownCountForTests()).toBe(0)
-    expect(await grantManagedCodexHookTrust(background)).toMatchObject({ reason: 'error' })
-    expect(runner).toHaveBeenCalledTimes(2)
-
-    // Why: the launch-path cooldown stays on its own lane.
-    expect(await grantManagedCodexHookTrust(inline)).toMatchObject({ reason: 'error' })
-    expect(await grantManagedCodexHookTrust(inline)).toMatchObject({ reason: 'retry-cached' })
-    expect(await grantManagedCodexHookTrust(background)).toMatchObject({ reason: 'error' })
-    expect(runner).toHaveBeenCalledTimes(4)
   })
 
   it('bounds transient cooldowns when host identities churn', async () => {

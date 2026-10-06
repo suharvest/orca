@@ -25,10 +25,6 @@ export type CodexManagedTrustGrantPlan = {
   managedEntries: readonly CodexTrustEntry[]
   host: CodexTrustGrantHost
   telemetryLane: CodexTrustGrantTelemetryLane
-  /** Match a pane where CODEX_HOME is absent instead of an explicit managed home. */
-  useDefaultCodexHome?: boolean
-  /** Off the launch path: a cold-start budget, and no cooldown; the caller schedules retries. */
-  background?: boolean
 }
 
 export type ExpectedManagedEntry = {

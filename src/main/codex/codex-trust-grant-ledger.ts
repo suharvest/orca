@@ -4,8 +4,8 @@ import { dirname, join } from 'node:path'
 import { getOrcaManagedCodexHomePath } from './codex-home-paths'
 import { normalizeCodexProjectPathForLookup } from './config-toml-trust'
 
-// Why: an inline grant session blocks launch prep, and a background one still
-// starts an app-server, so neither may run on every pane launch. This ledger
+// Why: a grant session blocks launch prep, so it may not run on every pane
+// launch. This ledger
 // records what a *verified* codex-side grant left behind (per runtime home):
 // the hook identity that was granted, the Codex-computed hash, and the codex
 // binary that computed it. Install skips the RPC while all three still hold;
