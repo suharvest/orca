@@ -78,7 +78,8 @@ export function resetNativeChatAppearanceSettings(
   return normalizeNativeChatAppearanceSettings(
     Object.fromEntries(
       Object.entries(appearance ?? {}).filter(
-        ([key]) => key !== 'fontSize' && key !== 'codeFontSize' && key !== 'width'
+        ([key]) =>
+          !['fontSize', 'codeFontSize', 'width', 'contrast', 'matchTerminalInterface'].includes(key)
       )
     )
   )

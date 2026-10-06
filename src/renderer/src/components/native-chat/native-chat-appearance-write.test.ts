@@ -35,7 +35,7 @@ describe('chat appearance write queue', () => {
       mock.state.settings = { ...mock.state.settings!, ...updates }
     })
     mock.state.updateSettings = updateSettings
-    const fromNewerVersion = { fontSize: 14, contrast: 151 }
+    const fromNewerVersion = { fontSize: 14, contrast: 151, futureSetting: 'keep' }
     mock.state.settings = {
       ...getDefaultSettings('/tmp'),
       nativeChatAppearance: fromNewerVersion
@@ -49,7 +49,8 @@ describe('chat appearance write queue', () => {
 
     expect(updateSettings).toHaveBeenCalledTimes(2)
     expect(mock.state.settings?.nativeChatAppearance).toEqual({
-      contrast: 151,
+      contrast: 150,
+      futureSetting: 'keep',
       codeFontSize: 16,
       fontSize: 15
     })

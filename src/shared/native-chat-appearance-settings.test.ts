@@ -54,17 +54,17 @@ describe('native chat appearance normalization', () => {
       matchTerminalInterface: false
     })
   })
-  it('resets only known controls while keeping settings from a newer version', () => {
+  it('resets all five known controls while keeping settings from a newer version', () => {
     const fromNewerVersion = {
       fontSize: 18,
       codeFontSize: 16,
       width: 'wide' as const,
       contrast: 151,
-      matchTerminalInterface: true
+      matchTerminalInterface: true,
+      futureSetting: { nested: 'keep' }
     }
     expect(resetNativeChatAppearanceSettings(fromNewerVersion)).toEqual({
-      contrast: 151,
-      matchTerminalInterface: true
+      futureSetting: { nested: 'keep' }
     })
     expect(resetNativeChatAppearanceSettings({ fontSize: 18 })).toBeUndefined()
   })
