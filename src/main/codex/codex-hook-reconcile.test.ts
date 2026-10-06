@@ -75,7 +75,7 @@ import {
   getCodexManagedHookInstallMaterial
 } from './codex-hook-definition'
 import type { CodexHookHashes } from './codex-hook-trust-derivation'
-import { computeTrustKey, readHookTrustEntries } from './config-toml-trust'
+import { computeTrustKey, readHookTrustEntries, upsertHookTrustEntries } from './config-toml-trust'
 
 // Why this file: the reconcile is the only writer of Orca's entry in ~/.codex,
 // and the common call, on every pane spawn and Codex launch, must change nothing.
@@ -372,6 +372,26 @@ describe('reconcileCodexHooks', () => {
       command: command()
     })
     expect(readHookTrustEntries(tomlPath()).get(key)?.trustedHash).toBe(
+      computeOrcaCodexHookHashes().stop
+    )
+  })
+
+  it("replaces a user hook's approval left at Orca's key while Codex cannot be found", async () => {
+    mocks.codexPath = join(userData, 'missing-codex')
+    await start()
+    const stop = {
+      sourcePath: hooksPath(),
+      eventLabel: 'stop' as const,
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: command()
+    }
+    // Why: keys are positional; removing a user hook ahead of Orca's leaves its approval here.
+    upsertHookTrustEntries(tomlPath(), [{ ...stop, trustedHash: 'sha256:user' }])
+
+    await reconcileCodexHooksForLaunch()
+
+    expect(readHookTrustEntries(tomlPath()).get(computeTrustKey(stop))?.trustedHash).toBe(
       computeOrcaCodexHookHashes().stop
     )
   })

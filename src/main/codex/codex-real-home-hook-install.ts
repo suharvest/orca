@@ -154,7 +154,14 @@ function reconcilePass(args: ReconcileArgs): RealHomeCodexHookOutcome | 'pruned'
   const trustStates = readHookTrustEntries(tomlPath)
   const hashes = args.hashes ?? {
     ...args.computedHashes,
-    ...keptApprovedHashes(plan, hooks, trustStates, sourcePaths, material.command)
+    ...keptApprovedHashes(
+      plan,
+      hooks,
+      trustStates,
+      sourcePaths,
+      material.command,
+      args.knownOrcaHashes
+    )
   }
   const approvals = sourcePaths.flatMap((keySource) =>
     plan.managedEntries.flatMap((entry) => {
@@ -203,9 +210,10 @@ function keptApprovedHashes(
   hooks: Record<string, HookDefinition[]>,
   trustStates: ReadonlyMap<string, CodexHookTrustState>,
   sourcePaths: readonly string[],
-  command: string
+  command: string,
+  knownOrcaHashes: readonly CodexHookHashes[]
 ): CodexHookHashes {
-  const approved = findApprovedOrcaHashes(trustStates, hooks, sourcePaths, command)
+  const approved = findApprovedOrcaHashes(trustStates, hooks, sourcePaths, command, knownOrcaHashes)
   for (const label of plan.changedLabels) {
     delete approved[label]
   }

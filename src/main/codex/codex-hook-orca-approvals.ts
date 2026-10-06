@@ -85,26 +85,28 @@ export function readStopgapOrcaHashes(home: CodexHookHome, command: string): Cod
   } catch {
     trustStates = new Map()
   }
+  const computed = computeOrcaCodexHookHashes(command)
   return {
-    ...computeOrcaCodexHookHashes(command),
+    ...computed,
     ...findApprovedOrcaHashes(
       trustStates,
       readHooksJson(home.hooksJsonPath)?.hooks,
       home.keySourcePaths,
-      command
+      command,
+      [computed, ...readEveryKnownCodexHookHashes()]
     )
   }
 }
 
-/** Each event's approval at Orca's entry holding a hash Orca's entry may carry, over files already read. */
+/** Each event's approval at Orca's entry holding one of `orcaHashes`, over files already read. */
 export function findApprovedOrcaHashes(
   trustStates: ReadonlyMap<string, CodexHookTrustState>,
   hooks: HooksConfig['hooks'],
   keySourcePaths: readonly string[],
-  command: string
+  command: string,
+  orcaHashes: readonly CodexHookHashes[]
 ): Partial<Record<CodexEventLabel, string>> {
   const slots = findOrcaEntrySlots(hooks, command)
-  const orcaHashes = [computeOrcaCodexHookHashes(command), ...readEveryKnownCodexHookHashes()]
   return Object.fromEntries(
     [...approvalsAtOrcaEntries(trustStates, slots, keySourcePaths, command)].flatMap(
       ([eventLabel, approvals]) => {
