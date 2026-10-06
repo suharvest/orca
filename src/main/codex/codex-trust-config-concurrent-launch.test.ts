@@ -102,7 +102,6 @@ function buildPlan(
       distro: 'Ubuntu',
       linuxRuntimeHome: overrides.runtimeHomePath ?? runtimeHomeDir
     },
-    telemetryLane: 'real-home',
     ...overrides
   }
 }

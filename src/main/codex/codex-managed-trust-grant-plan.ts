@@ -1,4 +1,3 @@
-import type { CodexTrustGrantTelemetryLane } from './codex-trust-grant-telemetry'
 import {
   readCodexTrustGrantLedgerHomeMatchingStamp,
   type CodexTrustGrantHost
@@ -24,7 +23,6 @@ export type CodexManagedTrustGrantPlan = {
   /** Managed trust identities Orca just wrote (no trustedHash). */
   managedEntries: readonly CodexTrustEntry[]
   host: CodexTrustGrantHost
-  telemetryLane: CodexTrustGrantTelemetryLane
 }
 
 export type ExpectedManagedEntry = {

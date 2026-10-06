@@ -95,8 +95,7 @@ function buildPlan(
     tomlPath: join(runtimeHomeDir, 'config.toml'),
     managedCommand: MANAGED_COMMAND,
     managedEntries: entries,
-    host,
-    telemetryLane: 'real-home'
+    host
   }
 }
 
@@ -177,7 +176,7 @@ describe('grantManagedCodexHookTrust', () => {
       ...managedEntry('stop'),
       sourcePath: String.raw`C:\Users\Alice\.codex\hooks.json`
     }
-    const plan: CodexManagedTrustGrantPlan = { ...buildPlan([entry]), telemetryLane: 'managed' }
+    const plan = buildPlan([entry])
     // Why: the managed fallback lane's write, both separator variants.
     upsertHookTrustEntries(plan.tomlPath, [entry])
     expect(readHookTrustEntries(plan.tomlPath).get(computeTrustKey(entry))?.trustedHash).toBe(
@@ -504,21 +503,12 @@ describe('trust-grant telemetry detail', () => {
     return events
   }
 
-  it('attributes the plan lane on granted events', async () => {
+  it('reports granted events on the managed lane', async () => {
     const events = captureTelemetry()
     const entries = [managedEntry('session_start')]
     _internals.setGrantSessionRunner(async () => grantedSessionResult(entries))
 
     expect(await grantManagedCodexHookTrust(buildPlan(entries))).toMatchObject({ lane: 'rpc' })
-    expect(events).toEqual([{ outcome: 'granted', hostKind: 'wsl', lane: 'real-home' }])
-  })
-
-  it('reports the managed lane independently of host kind', async () => {
-    const events = captureTelemetry()
-    const entries = [managedEntry('session_start')]
-    _internals.setGrantSessionRunner(async () => grantedSessionResult(entries))
-
-    await grantManagedCodexHookTrust({ ...buildPlan(entries), telemetryLane: 'managed' })
     expect(events).toEqual([{ outcome: 'granted', hostKind: 'wsl', lane: 'managed' }])
   })
 
@@ -537,7 +527,7 @@ describe('trust-grant telemetry detail', () => {
       {
         outcome: 'fallback',
         hostKind: 'wsl',
-        lane: 'real-home',
+        lane: 'managed',
         reason: 'error',
         errorClass: 'binary-missing'
       }
@@ -558,7 +548,7 @@ describe('trust-grant telemetry detail', () => {
       {
         outcome: 'verify_failed',
         hostKind: 'wsl',
-        lane: 'real-home',
+        lane: 'managed',
         reason: 'verify-failed',
         verifyClass: 'post-grant-untrusted'
       }
@@ -575,7 +565,7 @@ describe('trust-grant telemetry detail', () => {
       {
         outcome: 'verify_failed',
         hostKind: 'wsl',
-        lane: 'real-home',
+        lane: 'managed',
         reason: 'verify-failed',
         verifyClass: 'duplicate-key'
       }

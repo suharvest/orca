@@ -9,7 +9,6 @@ import {
   emitCodexTrustGrantTelemetry,
   type CodexTrustGrantErrorClass,
   type CodexTrustGrantFallbackReason,
-  type CodexTrustGrantTelemetryLane,
   type CodexTrustGrantVerifyClass
 } from './codex-trust-grant-telemetry'
 import {
@@ -46,7 +45,7 @@ import {
 const DISABLE_ENV_FLAG = 'ORCA_DISABLE_CODEX_TRUST_RPC'
 
 export type { CodexManagedTrustGrantPlan }
-export type { CodexTrustGrantFallbackReason, CodexTrustGrantTelemetryLane }
+export type { CodexTrustGrantFallbackReason }
 
 export type CodexManagedTrustGrantOutcome =
   | { lane: 'rpc'; entries: CodexTrustEntry[] }
@@ -95,7 +94,7 @@ function fallback(
   emitCodexTrustGrantTelemetry({
     outcome: reason === 'verify-failed' ? 'verify_failed' : 'fallback',
     hostKind: plan.host.kind,
-    lane: plan.telemetryLane,
+    lane: 'managed',
     reason,
     ...(errorClass !== undefined ? { errorClass } : {}),
     ...(verifyClass !== undefined ? { verifyClass } : {})
@@ -169,7 +168,7 @@ function completeGrant(
   emitCodexTrustGrantTelemetry({
     outcome: 'granted',
     hostKind: plan.host.kind,
-    lane: plan.telemetryLane
+    lane: 'managed'
   })
   return { lane: 'rpc', entries: grantedEntries }
 }
