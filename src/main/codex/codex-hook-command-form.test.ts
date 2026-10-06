@@ -189,18 +189,18 @@ describe('the Windows spelling change', () => {
     ]
   ])('converts %s to the cmd.exe spelling once, in its slot, at app start', (_case, older) => {
     const converted = plan(older, true)
-    expect(converted.changed).toBe(true)
+    expect(converted).toMatchObject({ kind: 'settle', changedLabels: new Set(['stop']) })
     expect(converted.hooks.Stop).toEqual([
       { hooks: [{ type: 'command', command: WINDOWS_CMD_GOLDEN, timeout: 10 }] },
       { hooks: [{ type: 'command', command: 'user-hook.cmd' }] }
     ])
-    expect(plan(WINDOWS_CMD_GOLDEN, true).changed).toBe(false)
+    expect(plan(WINDOWS_CMD_GOLDEN, true)).toMatchObject({ changedLabels: new Set() })
   })
 
   it.each([WINDOWS_POWERSHELL_TEXT, WINDOWS_BARE_CMD_SPELLING])(
     'leaves the older Windows form %# alone on a pane launch',
     (older) => {
-      expect(plan(older, false).changed).toBe(false)
+      expect(plan(older, false)).toMatchObject({ changedLabels: new Set() })
     }
   )
 })

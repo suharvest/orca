@@ -62,16 +62,14 @@ function stopEntry(sourcePath: string, groupIndex = 0): CodexTrustEntry {
 }
 
 async function reconcile(): Promise<string> {
-  return (
-    await reconcileRealHomeCodexHookEntries({
-      hashes: CODEX_HASHES,
-      knownOrcaHashes: [],
-      computedHashes: computeOrcaCodexHookHashes(),
-      isEnabled: () => true,
-      userDataPath: userDataDir,
-      convertOlderForms: true
-    })
-  ).outcome
+  return reconcileRealHomeCodexHookEntries({
+    hashes: CODEX_HASHES,
+    knownOrcaHashes: [],
+    computedHashes: computeOrcaCodexHookHashes(),
+    isEnabled: () => true,
+    userDataPath: userDataDir,
+    convertOlderForms: true
+  })
 }
 
 function linkCodexHomeToDotfiles(): string {

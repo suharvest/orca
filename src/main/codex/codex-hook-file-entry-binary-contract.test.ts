@@ -293,16 +293,14 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
     }
 
     async function reconcileRealHome(): Promise<string> {
-      return (
-        await reconcileRealHomeCodexHookEntries({
-          hashes,
-          knownOrcaHashes: [],
-          computedHashes: hashes,
-          isEnabled: () => true,
-          userDataPath: join(home, 'user-data'),
-          convertOlderForms: false
-        })
-      ).outcome
+      return reconcileRealHomeCodexHookEntries({
+        hashes,
+        knownOrcaHashes: [],
+        computedHashes: hashes,
+        isEnabled: () => true,
+        userDataPath: join(home, 'user-data'),
+        convertOlderForms: false
+      })
     }
 
     const realCodexHome = (): string => join(home, '.codex')

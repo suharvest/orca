@@ -1,4 +1,8 @@
-import type { HookCommandConfig, HookDefinition } from '../agent-hooks/installer-utils'
+import {
+  removeManagedCommands,
+  type HookCommandConfig,
+  type HookDefinition
+} from '../agent-hooks/installer-utils'
 import {
   buildCodexManagedHook,
   CODEX_EVENT_LABEL,
@@ -15,31 +19,26 @@ type HooksByEvent = Record<string, HookDefinition[]>
  * event: Codex hashes the group's matcher, so a copy inside a user's group
  * would wait for review forever.
  */
-export type RealHomeCodexHookEntryPlan = {
-  /** Every Orca copy but the one kept is gone; user hooks may shift, so their approvals move. */
-  pruned: HooksByEvent
-  /** `pruned` with Orca's entry rewritten in place or appended last; no user hook moves. */
-  hooks: HooksByEvent
-  prunedChanged: boolean
-  changed: boolean
-  /** Events whose hooks this plan changed; an approval read before the write may no longer fit them. */
-  changedLabels: ReadonlySet<CodexEventLabel>
-  /** Orca's entry in each planned event, keyed by `sourcePath`. */
-  managedEntries: CodexTrustEntry[]
-  /** Events left as they are: a newer build's entry, or an older one not up for conversion. */
-  untouchedLabels: ReadonlySet<CodexEventLabel>
-}
+export type RealHomeCodexHookEntryPlan =
+  /** Drop every Orca copy but the one kept first: user hooks may shift, so their approvals move. */
+  | { kind: 'prune'; hooks: HooksByEvent }
+  | {
+      kind: 'settle'
+      /** Orca's entry rewritten in place or appended last; no user hook moves. */
+      hooks: HooksByEvent
+      /** Events whose hooks this plan changed; an approval read before the write may no longer fit them. */
+      changedLabels: ReadonlySet<CodexEventLabel>
+      /** Orca's entry in each planned event, keyed by `sourcePath`. */
+      managedEntries: CodexTrustEntry[]
+      /** Events left as they are: a newer build's entry, or an older one not up for conversion. */
+      untouchedLabels: ReadonlySet<CodexEventLabel>
+    }
 
 type OrcaHandler = {
   groupIndex: number
-  handlerIndex: number
   hook: HookCommandConfig
   form: number
 }
-
-type OrcaUnit = { groupIndex: number; handlerIndex: number } | { groupIndex: number; key: string }
-
-const DIRECT_COMMAND_KEYS = ['command', 'bash', 'powershell'] as const
 
 function findOrcaHandlers(
   definitions: HookDefinition[],
@@ -48,16 +47,9 @@ function findOrcaHandlers(
 ): OrcaHandler[] {
   return definitions.flatMap((definition, groupIndex) =>
     Array.isArray(definition.hooks)
-      ? definition.hooks.flatMap((hook, handlerIndex) =>
+      ? definition.hooks.flatMap((hook) =>
           isOrcaCommand(hook.command)
-            ? [
-                {
-                  groupIndex,
-                  handlerIndex,
-                  hook,
-                  form: readCodexHookCommandForm(hook.command, command)
-                }
-              ]
+            ? [{ groupIndex, hook, form: readCodexHookCommandForm(hook.command, command) }]
             : []
         )
       : []
@@ -76,50 +68,17 @@ function isOrcaOnlyGroup(
   )
 }
 
-function hasCommand(definition: HookDefinition): boolean {
-  return (
-    DIRECT_COMMAND_KEYS.some((key) => typeof definition[key] === 'string') ||
-    (Array.isArray(definition.hooks) && definition.hooks.length > 0)
-  )
-}
-
-function withoutOrcaUnit(definitions: HookDefinition[], unit: OrcaUnit): HookDefinition[] {
-  const definition: HookDefinition = { ...definitions[unit.groupIndex]! }
-  if ('key' in unit) {
-    delete definition[unit.key]
-  } else {
-    definition.hooks = definition.hooks!.filter((_, index) => index !== unit.handlerIndex)
-    if (definition.hooks.length === 0) {
-      delete definition.hooks
-    }
-  }
-  const next = [...definitions]
-  if (hasCommand(definition)) {
-    next[unit.groupIndex] = definition
-  } else {
-    next.splice(unit.groupIndex, 1)
-  }
-  return next
-}
-
-function locateHandler(
-  definitions: HookDefinition[],
-  hook: HookCommandConfig
-): { groupIndex: number; handlerIndex: number } {
-  for (const [groupIndex, definition] of definitions.entries()) {
-    const handlerIndex = definition.hooks?.indexOf(hook) ?? -1
-    if (handlerIndex !== -1) {
-      return { groupIndex, handlerIndex }
-    }
-  }
-  throw new Error('kept Codex hook handler is missing from its plan')
-}
-
 // Why every field: Codex hashes command, type, timeout, async and statusMessage, so an
 // edited copy kept in place would sit beside an approval for what Orca wrote.
 function isSameHook(left: HookCommandConfig, right: HookCommandConfig): boolean {
   const keys = new Set([...Object.keys(left), ...Object.keys(right)])
   return [...keys].every((key) => JSON.stringify(left[key]) === JSON.stringify(right[key]))
+}
+
+function isSameList(left: HookDefinition[], right: HookDefinition[]): boolean {
+  return (
+    left.length === right.length && left.every((definition, index) => definition === right[index])
+  )
 }
 
 export function planRealHomeCodexHookEntries(args: {
@@ -138,90 +97,70 @@ export function planRealHomeCodexHookEntries(args: {
   const hooks: HooksByEvent = { ...args.hooks }
   const changedLabels = new Set<CodexEventLabel>()
   const untouchedLabels = new Set<CodexEventLabel>()
+  const managedEntries: CodexTrustEntry[] = []
   let prunedChanged = false
 
   for (const eventName of material.events) {
+    const label = CODEX_EVENT_LABEL[eventName]
     const current = Array.isArray(args.hooks[eventName]) ? args.hooks[eventName] : []
     const handlers = findOrcaHandlers(current, isOrcaCommand, command)
-    const directOrcaUnits: OrcaUnit[] = current.flatMap((definition, groupIndex) =>
-      DIRECT_COMMAND_KEYS.filter((key) => isOrcaCommand(definition[key])).map((key) => ({
-        groupIndex,
-        key
-      }))
-    )
     const holdsOlderForm =
-      directOrcaUnits.length > 0 || handlers.some((handler) => handler.hook.command !== command)
+      current.some((definition) =>
+        [definition.command, definition.bash, definition.powershell].some(isOrcaCommand)
+      ) || handlers.some((handler) => handler.hook.command !== command)
     if (
       handlers.some((handler) => handler.form > CODEX_HOOK_COMMAND_FORM) ||
       (holdsOlderForm && !args.convertOlderForms)
     ) {
       // Why: a newer build owns this event's entry, and an older build's may still be running.
-      untouchedLabels.add(CODEX_EVENT_LABEL[eventName])
+      untouchedLabels.add(label)
       continue
     }
-    const wanted = buildCodexManagedHook(command, eventName)
     const keeper = handlers.find((handler) =>
       isOrcaOnlyGroup(current[handler.groupIndex]!, isOrcaCommand)
     )
-    const others: OrcaUnit[] = [
-      ...handlers.filter((handler) => handler !== keeper),
-      ...directOrcaUnits
-    ]
-    others.sort((a, b) =>
-      a.groupIndex !== b.groupIndex
-        ? b.groupIndex - a.groupIndex
-        : ('handlerIndex' in b ? b.handlerIndex : -1) - ('handlerIndex' in a ? a.handlerIndex : -1)
-    )
-    let definitions = current
-    for (const unit of others) {
-      definitions = withoutOrcaUnit(definitions, unit)
-    }
-    if (definitions !== current) {
-      pruned[eventName] = definitions
+    const rest = removeManagedCommands(current, isOrcaCommand)
+    // Why the kept group where its copies were: the slot keeps its position, so no user approval key moves.
+    const slot = keeper
+      ? removeManagedCommands(current.slice(0, keeper.groupIndex), isOrcaCommand).length
+      : rest.length
+    const keptGroup = keeper && current[keeper.groupIndex]!
+    const prunedDefinitions = keptGroup
+      ? [
+          ...rest.slice(0, slot),
+          keptGroup.hooks!.length === 1 ? keptGroup : { hooks: [keeper.hook] },
+          ...rest.slice(slot)
+        ]
+      : rest
+    if (!isSameList(prunedDefinitions, current)) {
+      pruned[eventName] = prunedDefinitions
       prunedChanged = true
+      continue
     }
-    if (!keeper) {
-      // Why last: no user hook's positional approval key moves.
-      definitions = [...definitions, { hooks: [wanted] }]
-    } else if (!isSameHook(keeper.hook, wanted)) {
-      // Why in place: the slot keeps its position, so no user approval key moves.
-      const { groupIndex } = locateHandler(definitions, keeper.hook)
-      definitions = [...definitions]
-      definitions[groupIndex] = { hooks: [wanted] }
-    }
+    const wanted = buildCodexManagedHook(command, eventName)
+    // Why last when new: no user hook's positional approval key moves.
+    const definitions =
+      keeper && isSameHook(keeper.hook, wanted)
+        ? current
+        : [...current.slice(0, slot), { hooks: [wanted] }, ...current.slice(slot + 1)]
     if (definitions !== current) {
       hooks[eventName] = definitions
-      changedLabels.add(CODEX_EVENT_LABEL[eventName])
+      changedLabels.add(label)
+    }
+    const entry = createCodexHookTrustEntry(
+      sourcePath,
+      eventName,
+      slot,
+      0,
+      definitions[slot]!,
+      definitions[slot]!.hooks![0]!
+    )
+    if (entry) {
+      managedEntries.push(entry)
     }
   }
 
-  const managedEntries = material.events.flatMap((eventName) =>
-    untouchedLabels.has(CODEX_EVENT_LABEL[eventName])
-      ? []
-      : hooks[eventName]!.flatMap((definition, groupIndex) =>
-          (definition.hooks ?? []).flatMap((hook, handlerIndex) => {
-            const entry =
-              hook.command === command
-                ? createCodexHookTrustEntry(
-                    sourcePath,
-                    eventName,
-                    groupIndex,
-                    handlerIndex,
-                    definition,
-                    hook
-                  )
-                : null
-            return entry ? [entry] : []
-          })
-        )
-  )
-  return {
-    pruned,
-    hooks,
-    prunedChanged,
-    changed: changedLabels.size > 0,
-    changedLabels,
-    managedEntries,
-    untouchedLabels
-  }
+  return prunedChanged
+    ? { kind: 'prune', hooks: pruned }
+    : { kind: 'settle', hooks, changedLabels, managedEntries, untouchedLabels }
 }

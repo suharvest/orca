@@ -28,10 +28,6 @@ export function getRealHomeHookKeySourcePaths(): [string, ...string[]] {
   return resolved === spelled ? [spelled] : [spelled, resolved]
 }
 
-export function getRealHomeConfigTomlPath(): string {
-  return join(getSystemCodexHomePath(), 'config.toml')
-}
-
 /** Orca-side home of the pristine copy; the rolling hooks.json.bak beside the file is writeHooksJson's. */
 function getRealHomeHookStateDir(userDataPath: string): string {
   return join(userDataPath, 'codex-real-home-hooks')

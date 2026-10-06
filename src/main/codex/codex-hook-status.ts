@@ -14,7 +14,8 @@ import {
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,
   getManagedCommand,
-  getManagedScriptPath
+  getManagedScriptPath,
+  getSystemCodexConfigTomlPath
 } from './codex-hook-definition'
 import {
   approvalsAtOrcaEntries,
@@ -26,12 +27,10 @@ import type { CodexHookAnswer } from './codex-hook-trust-derivation'
 import { readKnownCodexHookAnswer } from './codex-hook-hash-lookup'
 import { resolveCodexHookStatusHome } from './codex-hook-reconcile'
 import {
-  getRealHomeConfigTomlPath,
   getRealHomeHookKeySourcePaths,
   getRealHomeHooksJsonPath,
   readRealHomeHooksFileShapeProblem
 } from './codex-real-home-hooks-json'
-
 
 /**
  * Status for `runtimeHomePath`, or for the home the next native pane gets when
@@ -82,7 +81,7 @@ export function readRealHomeCodexHookStatus(
 ): AgentHookInstallStatus {
   const home: CodexHookHome = {
     hooksJsonPath: getRealHomeHooksJsonPath(),
-    tomlPath: getRealHomeConfigTomlPath(),
+    tomlPath: getSystemCodexConfigTomlPath(),
     keySourcePaths: getRealHomeHookKeySourcePaths()
   }
   const status = readHomeStatus(home, answer)
